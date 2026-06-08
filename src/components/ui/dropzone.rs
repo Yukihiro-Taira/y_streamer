@@ -177,7 +177,10 @@ pub fn DropzoneIcon(
     #[props(into, optional)] class: Option<String>,
     children: Element,
 ) -> Element {
-    let merged = tw_merge!("text-muted-foreground", class.as_deref().unwrap_or(""));
+    let ctx = use_context::<DropzoneCtx>();
+    let dragging = *ctx.is_dragging.read();
+    let anim = if dragging { "animate-bounce" } else { "" };
+    let merged = tw_merge!("text-muted-foreground", anim, class.as_deref().unwrap_or(""));
     rsx! { div { class: "{merged}", {children} } }
 }
 

@@ -3,13 +3,15 @@ use icons::Upload;
 
 use crate::components::ui::dropzone::{
     Dropzone, DropzoneArea, DropzoneFileList, DropzoneHint, DropzoneIcon, DropzoneLabel,
+    DropzoneOverlay,
 };
 
 #[component]
-pub fn DemoDropzone() -> Element {
+pub fn DemoDropzoneOverlay() -> Element {
     rsx! {
         div { class: "max-w-[700px] mx-auto w-full",
             Dropzone {
+                DropzoneOverlay {}
                 div { class: "space-y-4",
                     div { class: "space-y-1",
                         h2 { class: "text-base font-semibold", "Upload files" }
