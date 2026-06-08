@@ -31,8 +31,8 @@ struct FileDropState {
 /// Attaches window-level drag-and-drop listeners (web only).
 /// Returns reactive signals for dropped files and drag state.
 fn use_file_drop() -> FileDropState {
-    let files = use_signal(Vec::<DroppedFile>::new);
-    let is_dragging = use_signal(|| false);
+    let mut files = use_signal(Vec::<DroppedFile>::new);
+    let mut is_dragging = use_signal(|| false);
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -49,7 +49,7 @@ fn use_file_drop() -> FileDropState {
                     e.prevent_default();
                 });
 
-            let on_dragenter: Closure<dyn Fn(web_sys::DragEvent)> =
+            let on_dragenter: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
                     let count = *drag_count.read() + 1;
@@ -59,7 +59,7 @@ fn use_file_drop() -> FileDropState {
                     }
                 });
 
-            let on_dragleave: Closure<dyn Fn(web_sys::DragEvent)> =
+            let on_dragleave: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
                     let count = drag_count.read().saturating_sub(1);
@@ -69,7 +69,7 @@ fn use_file_drop() -> FileDropState {
                     }
                 });
 
-            let on_drop: Closure<dyn Fn(web_sys::DragEvent)> =
+            let on_drop: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
                     e.stop_propagation();
