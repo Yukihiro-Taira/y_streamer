@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/macros"]
+exclude = ["__TUI_FFMRUST/*"]
 
 [package]
 name = "video_platform_app"
