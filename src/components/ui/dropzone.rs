@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use icons::{FileArchive, FileAudio, FileCode, FileImage, FileJson, FileSpreadsheet, FileText};
+use icons::{FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText};
 use tw_merge::tw_merge;
 
 // ── File type ─────────────────────────────────────────────────────────────────
@@ -214,48 +214,56 @@ pub fn DropzoneHint(
     rsx! { p { class: "{merged}", {children} } }
 }
 
-// ── File type icon helper ─────────────────────────────────────────────────────
+// ── FileKind ──────────────────────────────────────────────────────────────────
 
-fn file_type_icon(mime: &str) -> Element {
-    let class = "size-4 text-muted-foreground";
-    if mime.starts_with("audio/") {
-        rsx! { FileAudio { class } }
-    } else if mime.starts_with("image/") {
-        rsx! { FileImage { class } }
-    } else if mime == "application/pdf" {
-        rsx! { FileText { class } }
-    } else if mime == "application/zip"
-        || mime == "application/x-tar"
-        || mime == "application/gzip"
-        || mime == "application/x-7z-compressed"
-        || mime == "application/x-rar-compressed"
-    {
-        rsx! { FileArchive { class } }
-    } else if mime.starts_with("text/")
-        || mime == "application/json"
-        || mime == "application/xml"
-    {
-        let is_code = matches!(
-            mime,
+enum FileKind {
+    Image,
+    Audio,
+    Pdf,
+    Archive,
+    Code,
+    Spreadsheet,
+    Text,
+    Other,
+}
+
+impl FileKind {
+    fn from_mime(mime: &str) -> Self {
+        match mime {
+            m if m.starts_with("image/") => Self::Image,
+            m if m.starts_with("audio/") => Self::Audio,
+            "application/pdf" => Self::Pdf,
+            "application/zip"
+            | "application/x-tar"
+            | "application/gzip"
+            | "application/x-7z-compressed"
+            | "application/x-rar-compressed" => Self::Archive,
             "text/javascript"
-                | "text/typescript"
-                | "text/x-rust"
-                | "text/html"
-                | "text/css"
-                | "application/json"
-                | "application/xml"
-        );
-        if is_code {
-            rsx! { FileCode { class } }
-        } else {
-            rsx! { FileText { class } }
+            | "text/typescript"
+            | "text/x-rust"
+            | "text/html"
+            | "text/css"
+            | "application/json"
+            | "application/xml" => Self::Code,
+            m if m.contains("spreadsheet") || m.contains("excel") || m == "text/csv" => {
+                Self::Spreadsheet
+            }
+            m if m.starts_with("text/") => Self::Text,
+            _ => Self::Other,
         }
-    } else if mime.contains("spreadsheet") || mime.contains("excel") || mime == "text/csv" {
-        rsx! { FileSpreadsheet { class } }
-    } else if mime.contains("json") {
-        rsx! { FileJson { class } }
-    } else {
-        rsx! { FileText { class } }
+    }
+
+    fn icon(&self) -> Element {
+        let class = "size-4 text-muted-foreground";
+        match self {
+            Self::Image => rsx! { FileImage { class } },
+            Self::Audio => rsx! { FileAudio { class } },
+            Self::Pdf => rsx! { FileText { class } },
+            Self::Archive => rsx! { FileArchive { class } },
+            Self::Code => rsx! { FileCode { class } },
+            Self::Spreadsheet => rsx! { FileSpreadsheet { class } },
+            Self::Text | Self::Other => rsx! { FileText { class } },
+        }
     }
 }
 
@@ -292,8 +300,7 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
                         }
                     } else {
                         div { class: "size-10 rounded bg-muted flex items-center justify-center shrink-0 relative",
-                            {file_type_icon(&file.mime_type)}
-                            // PDF badge
+                            {FileKind::from_mime(&file.mime_type).icon()}
                             if file.mime_type == "application/pdf" {
                                 span { class: "absolute -bottom-1 -right-1 text-[8px] font-bold bg-red-500 text-white rounded px-[3px] leading-tight",
                                     "PDF"
