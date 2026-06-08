@@ -8,7 +8,8 @@ use tw_merge::tw_merge;
 pub struct DropzoneFile {
     pub name: String,
     pub size_bytes: u64,
-    /// Object URL for image preview (wasm32 only, None otherwise)
+    pub mime_type: String,
+    /// Object URL for image/video preview (wasm32 only, None otherwise)
     pub preview_url: Option<String>,
 }
 
@@ -89,7 +90,7 @@ pub fn Dropzone(children: Element) -> Element {
                     for i in 0..file_list.length() {
                         if let Some(f) = file_list.item(i) {
                             let mime = f.type_();
-                            let preview_url = if mime.starts_with("image/") {
+                            let preview_url = if mime.starts_with("image/") || mime.starts_with("video/") {
                                 web_sys::Url::create_object_url_with_blob(&f).ok()
                             } else {
                                 None
@@ -97,6 +98,7 @@ pub fn Dropzone(children: Element) -> Element {
                             dropped.push(DropzoneFile {
                                 name: f.name(),
                                 size_bytes: f.size() as u64,
+                                mime_type: mime,
                                 preview_url,
                             });
                         }
@@ -231,9 +233,17 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
                 div { class: "flex items-center gap-3 py-3",
                     // Thumbnail or file icon
                     if let Some(url) = &file.preview_url {
-                        img {
-                            src: "{url}",
-                            class: "size-10 rounded object-cover shrink-0 bg-muted",
+                        if file.mime_type.starts_with("video/") {
+                            video {
+                                src: "{url}",
+                                class: "size-10 rounded object-cover shrink-0 bg-muted",
+                                preload: "metadata",
+                            }
+                        } else {
+                            img {
+                                src: "{url}",
+                                class: "size-10 rounded object-cover shrink-0 bg-muted",
+                            }
                         }
                     } else {
                         div { class: "size-10 rounded bg-muted flex items-center justify-center shrink-0",
