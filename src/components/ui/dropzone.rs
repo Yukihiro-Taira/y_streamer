@@ -160,9 +160,9 @@ pub fn DropzoneArea(
     let dragging = *ctx.is_dragging.read();
 
     let base = if dragging {
-        "border-2 border-dashed border-primary bg-primary/5 rounded-xl py-12 px-10 flex flex-col items-center gap-3 transition-colors cursor-pointer"
+        "w-full min-h-[200px] border border-dashed border-primary bg-primary/5 rounded-xl py-12 px-10 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer"
     } else {
-        "border-2 border-dashed border-border rounded-xl py-12 px-10 flex flex-col items-center gap-3 transition-colors cursor-pointer hover:border-primary/50 hover:bg-accent/10"
+        "w-full min-h-[200px] border border-dashed border-border/60 bg-accent/40 rounded-xl py-12 px-10 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer hover:border-border hover:bg-accent/60"
     };
 
     rsx! {

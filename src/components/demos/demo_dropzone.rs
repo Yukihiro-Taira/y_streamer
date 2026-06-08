@@ -9,17 +9,28 @@ use crate::components::ui::dropzone::{
 #[component]
 pub fn DemoDropzone() -> Element {
     rsx! {
-        Dropzone {
-            DropzoneOverlay {}
-            div { class: "space-y-4",
-                DropzoneArea {
-                    DropzoneIcon {
-                        Upload { class: "size-8" }
+        div { class: "max-w-[700px] mx-auto w-full",
+            Dropzone {
+                DropzoneOverlay {}
+                div { class: "space-y-4",
+                    // ── Header ────────────────────────────────────────────
+                    div { class: "space-y-1",
+                        h2 { class: "text-base font-semibold", "Upload files" }
+                        p { class: "text-sm text-muted-foreground",
+                            "Drag and drop your files here or click to browse."
+                        }
                     }
-                    DropzoneLabel { "Drag 'n' drop files here, or click to select files" }
-                    DropzoneHint { "You can upload 8 files (up to 8 MB each)" }
+                    // ── Drop zone ─────────────────────────────────────────
+                    DropzoneArea {
+                        DropzoneIcon {
+                            Upload { class: "size-7" }
+                        }
+                        DropzoneLabel { "Drag 'n' drop files here, or click to select files" }
+                        DropzoneHint { "You can upload 8 files (up to 8 MB each)" }
+                    }
+                    // ── File list ─────────────────────────────────────────
+                    DropzoneFileList {}
                 }
-                DropzoneFileList {}
             }
         }
     }
