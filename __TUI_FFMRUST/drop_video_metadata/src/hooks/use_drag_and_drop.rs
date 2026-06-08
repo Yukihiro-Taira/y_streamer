@@ -23,14 +23,14 @@ impl DragAndDropState {
     pub fn report_lines(&self) -> Vec<Line<'static>> {
         match &self.probe_state {
             ProbeState::Waiting => vec![line_gray(
-                "Drop or paste a local video path to inspect container, streams, tags, and chapters.",
+                "Drop or paste a local video path to inspect container, streams, tags, chapters, and raw ffprobe JSON.",
             )],
             ProbeState::Missing(path) => vec![
                 line_label_value("Path", path.clone()),
                 line_gray("The file does not exist on disk."),
             ],
             ProbeState::ProbeError(message) => vec![line_label_value("Error", message.clone())],
-            ProbeState::Loaded(report) => report.to_lines(),
+            ProbeState::Loaded(report) => report.report_lines(),
         }
     }
 
@@ -107,6 +107,7 @@ pub struct ProbeReport {
     format_tags: Vec<(String, String)>,
     streams: Vec<StreamSummary>,
     chapters: Vec<ChapterSummary>,
+    raw_json_lines: Vec<String>,
 }
 
 impl ProbeReport {
@@ -120,6 +121,8 @@ impl ProbeReport {
                 "-show_format",
                 "-show_streams",
                 "-show_chapters",
+                "-show_programs",
+                "-show_stream_groups",
             ])
             .arg(path)
             .output()
@@ -135,12 +138,16 @@ impl ProbeReport {
             return Err(anyhow!(message));
         }
 
-        let parsed: FfprobeOutput =
+        let raw_value: Value =
             serde_json::from_slice(&output.stdout).context("failed to parse ffprobe json")?;
-        Ok(Self::from_ffprobe(path, parsed))
+        let raw_json = serde_json::to_string_pretty(&raw_value)
+            .context("failed to pretty-print ffprobe json")?;
+        let parsed: FfprobeOutput =
+            serde_json::from_value(raw_value).context("failed to deserialize ffprobe json")?;
+        Ok(Self::from_ffprobe(path, parsed, raw_json))
     }
 
-    fn from_ffprobe(path: &Path, parsed: FfprobeOutput) -> Self {
+    fn from_ffprobe(path: &Path, parsed: FfprobeOutput, raw_json: String) -> Self {
         let streams = parsed
             .streams
             .into_iter()
@@ -160,6 +167,8 @@ impl ProbeReport {
             .map(ChapterSummary::from_chapter)
             .collect::<Vec<_>>();
 
+        let program_count = parsed.programs.len();
+        let stream_group_count = parsed.stream_groups.len();
         let format = parsed.format.unwrap_or_default();
 
         Self {
@@ -167,14 +176,22 @@ impl ProbeReport {
             file_name: file_name_label(path),
             format_name: format.format_name.unwrap_or_else(|| "unknown".into()),
             format_long_name: format.format_long_name.unwrap_or_default(),
-            program_count: format
-                .nb_programs
-                .map(|n| n.to_string())
-                .unwrap_or_default(),
-            stream_group_count: format
-                .nb_stream_groups
-                .map(|n| n.to_string())
-                .unwrap_or_default(),
+            program_count: if program_count > 0 {
+                program_count.to_string()
+            } else {
+                format
+                    .nb_programs
+                    .map(|n| n.to_string())
+                    .unwrap_or_default()
+            },
+            stream_group_count: if stream_group_count > 0 {
+                stream_group_count.to_string()
+            } else {
+                format
+                    .nb_stream_groups
+                    .map(|n| n.to_string())
+                    .unwrap_or_default()
+            },
             duration: display_numeric_option(format.duration.as_deref(), "s"),
             size: display_numeric_option(format.size.as_deref(), "bytes"),
             bit_rate: display_numeric_option(format.bit_rate.as_deref(), "bps"),
@@ -188,6 +205,7 @@ impl ProbeReport {
             format_tags: flatten_tags(format.tags),
             streams,
             chapters,
+            raw_json_lines: raw_json.lines().map(ToOwned::to_owned).collect(),
         }
     }
 
@@ -195,7 +213,21 @@ impl ProbeReport {
         self.file_name.clone()
     }
 
-    fn to_lines(&self) -> Vec<Line<'static>> {
+    fn report_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = self.summary_lines();
+        lines.extend(self.streams_lines());
+        if !self.chapters.is_empty() {
+            lines.push(line_section("Chapters"));
+            for chapter in &self.chapters {
+                lines.extend(chapter.to_lines());
+            }
+        }
+        lines.push(line_section("Raw ffprobe JSON"));
+        lines.extend(self.raw_json_lines());
+        lines
+    }
+
+    fn summary_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![
             line_label_value("Path", self.path.clone()),
             line_label_value("File", self.file_name.clone()),
@@ -224,6 +256,53 @@ impl ProbeReport {
             line_label_value("Chapters", self.chapter_count.to_string()),
         ];
 
+        lines.push(line_section("Pipeline summary"));
+        lines.push(line_bullet(
+            "format family",
+            format!(
+                "{} | {}",
+                self.format_name,
+                fallback_empty(&self.format_long_name)
+            ),
+        ));
+        lines.push(line_bullet(
+            "stream topology",
+            format!(
+                "{} total streams, {} video, {} audio, {} subtitle",
+                self.stream_count, self.video_count, self.audio_count, self.subtitle_count
+            ),
+        ));
+        if let Some(video) = self
+            .streams
+            .iter()
+            .find(|stream| stream.codec_type == "video")
+        {
+            lines.push(line_bullet(
+                "primary video",
+                join_segments(&[
+                    format!("codec={}", fallback_empty(&video.codec_name)),
+                    format!("size={}", video.resolution_label()),
+                    format!("fps={}", fallback_empty(&video.frame_rate)),
+                    format!("pix_fmt={}", fallback_empty(&video.pixel_format)),
+                ]),
+            ));
+        }
+        if let Some(audio) = self
+            .streams
+            .iter()
+            .find(|stream| stream.codec_type == "audio")
+        {
+            lines.push(line_bullet(
+                "primary audio",
+                join_segments(&[
+                    format!("codec={}", fallback_empty(&audio.codec_name)),
+                    format!("sample_rate={}", fallback_empty(&audio.sample_rate)),
+                    format!("channels={}", fallback_empty(&audio.channels)),
+                    format!("layout={}", fallback_empty(&audio.channel_layout)),
+                ]),
+            ));
+        }
+
         if !self.format_tags.is_empty() {
             lines.push(line_section("Format tags"));
             for (key, value) in &self.format_tags {
@@ -231,6 +310,11 @@ impl ProbeReport {
             }
         }
 
+        lines
+    }
+
+    fn streams_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
         if !self.streams.is_empty() {
             lines.push(line_section("Streams"));
             for stream in &self.streams {
@@ -246,6 +330,10 @@ impl ProbeReport {
         }
 
         lines
+    }
+
+    fn raw_json_lines(&self) -> Vec<Line<'static>> {
+        self.raw_json_lines.iter().cloned().map(Line::raw).collect()
     }
 }
 
@@ -426,6 +514,15 @@ impl StreamSummary {
 
         lines
     }
+
+    fn resolution_label(&self) -> String {
+        let joined = join_non_empty([self.width.clone(), self.height.clone()]);
+        if joined.is_empty() {
+            "n/a".into()
+        } else {
+            joined.replace(' ', " x ")
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -470,6 +567,10 @@ struct FfprobeOutput {
     streams: Vec<FfprobeStream>,
     #[serde(default)]
     chapters: Vec<FfprobeChapter>,
+    #[serde(default)]
+    programs: Vec<Value>,
+    #[serde(default)]
+    stream_groups: Vec<Value>,
     format: Option<FfprobeFormat>,
 }
 
@@ -706,4 +807,13 @@ fn join_non_empty(values: [String; 2]) -> String {
         .filter(|value| !value.trim().is_empty())
         .collect::<Vec<_>>()
         .join(" | ")
+}
+
+fn join_segments(values: &[String]) -> String {
+    values
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ")
 }

@@ -13,7 +13,9 @@ use crossterm::terminal::{
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
+use ratatui::widgets::{
+    Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+};
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::hooks::use_drag_and_drop::{DragAndDropState, ProbeState};
@@ -27,19 +29,38 @@ fn main() -> Result<()> {
 
 fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     let mut drag_and_drop = DragAndDropState::default();
+    let mut scroll: u16 = 0;
 
     loop {
-        terminal.draw(|frame| render(frame, &drag_and_drop))?;
+        terminal.draw(|frame| render(frame, &drag_and_drop, scroll))?;
 
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => break,
-                KeyCode::Enter => drag_and_drop.commit_input(),
-                KeyCode::Backspace => drag_and_drop.pop_input(),
-                KeyCode::Char(ch) => drag_and_drop.push_input(ch),
+                KeyCode::Enter => {
+                    drag_and_drop.commit_input();
+                    scroll = 0;
+                }
+                KeyCode::Backspace => {
+                    drag_and_drop.pop_input();
+                    scroll = 0;
+                }
+                KeyCode::Up => scroll = scroll.saturating_sub(1),
+                KeyCode::Down => scroll = scroll.saturating_add(1),
+                KeyCode::PageUp => scroll = scroll.saturating_sub(10),
+                KeyCode::PageDown => scroll = scroll.saturating_add(10),
+                KeyCode::Home => scroll = 0,
+                KeyCode::End => scroll = u16::MAX,
+                KeyCode::Char(ch) => {
+                    drag_and_drop.push_input(ch);
+                    scroll = 0;
+                }
                 _ => {}
             },
-            Event::Paste(data) => drag_and_drop.replace_input(data),
+            Event::Paste(data) => {
+                drag_and_drop.replace_input(data);
+                scroll = 0;
+            }
             _ => {}
         }
     }
@@ -47,12 +68,14 @@ fn run_app(terminal: &mut DefaultTerminal) -> Result<()> {
     Ok(())
 }
 
-fn render(frame: &mut Frame, drag_and_drop: &DragAndDropState) {
+fn render(frame: &mut Frame, drag_and_drop: &DragAndDropState, scroll: u16) {
     let area = frame.area();
     let root = Block::bordered()
         .border_type(BorderType::Rounded)
         .title(" drop_video_metadata ")
-        .title_bottom(Line::from(" q quit ").right_aligned());
+        .title_bottom(
+            Line::from(" arrows scroll • PgUp/PgDn • Home/End • q quit ").right_aligned(),
+        );
     let inner = root.inner(area);
     frame.render_widget(root, area);
 
@@ -66,7 +89,7 @@ fn render(frame: &mut Frame, drag_and_drop: &DragAndDropState) {
     .split(inner);
 
     frame.render_widget(
-        Paragraph::new("Drop or paste a file path, or type one then press Enter.")
+        Paragraph::new("Drop or paste a file path, or type one then press Enter. All available metadata and raw ffprobe JSON are shown below.")
             .style(Style::new().fg(Color::Gray)),
         layout[0],
     );
@@ -113,12 +136,23 @@ fn render(frame: &mut Frame, drag_and_drop: &DragAndDropState) {
         layout[2],
     );
 
+    let metadata_lines = drag_and_drop.report_lines();
+    let viewport_height = layout[3].height.saturating_sub(2) as usize;
+    let max_scroll = metadata_lines.len().saturating_sub(viewport_height) as u16;
+    let clamped_scroll = scroll.min(max_scroll);
+
     frame.render_widget(
-        Paragraph::new(drag_and_drop.report_lines())
+        Paragraph::new(metadata_lines.clone())
             .block(Block::bordered().title("metadata"))
+            .scroll((clamped_scroll, 0))
             .wrap(Wrap { trim: false }),
         layout[3],
     );
+
+    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+    let mut scrollbar_state =
+        ScrollbarState::new(metadata_lines.len()).position(clamped_scroll as usize);
+    frame.render_stateful_widget(scrollbar, layout[3], &mut scrollbar_state);
 }
 
 fn init_terminal() -> Result<DefaultTerminal> {
