@@ -346,15 +346,12 @@ pub fn DropzoneFileGrid(#[props(into, optional)] class: Option<String>) -> Eleme
         return rsx! {};
     }
 
-    let merged = tw_merge!(
-        "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3",
-        class.as_deref().unwrap_or("")
-    );
+    let merged = tw_merge!("flex flex-wrap gap-3", class.as_deref().unwrap_or(""));
 
     rsx! {
         div { class: "{merged}",
             for (idx, file) in files.iter().enumerate() {
-                div { class: "relative group aspect-square rounded-xl overflow-hidden bg-muted",
+                div { class: "relative group w-32 h-32 rounded-xl overflow-hidden bg-muted shrink-0",
                     // Media preview or icon fill
                     if let Some(url) = &file.preview_url {
                         if file.mime_type.starts_with("video/") {
