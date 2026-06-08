@@ -49,11 +49,15 @@ pub fn Dropzone(children: Element) -> Element {
         let mut drag_count = use_signal(|| 0u32);
 
         let on_mounted = move |event: dioxus::prelude::MountedEvent| {
-            use wasm_bindgen::closure::Closure;
             use wasm_bindgen::JsCast;
+            use wasm_bindgen::closure::Closure;
 
-            let Ok(raw) = event.get_raw_element() else { return };
-            let Some(el) = raw.downcast_ref::<web_sys::Element>() else { return };
+            let Ok(raw) = event.get_raw_element() else {
+                return;
+            };
+            let Some(el) = raw.downcast_ref::<web_sys::Element>() else {
+                return;
+            };
             let el = el.clone();
 
             // window dragover — only to prevent browser from opening the file
@@ -74,11 +78,8 @@ pub fn Dropzone(children: Element) -> Element {
                         is_dragging.set(true);
                     }
                 });
-            el.add_event_listener_with_callback(
-                "dragenter",
-                on_dragenter.as_ref().unchecked_ref(),
-            )
-            .ok();
+            el.add_event_listener_with_callback("dragenter", on_dragenter.as_ref().unchecked_ref())
+                .ok();
             on_dragenter.forget();
 
             let el2 = el.clone();
@@ -169,10 +170,7 @@ pub fn DropzoneOverlay(#[props(into, optional)] class: Option<String>) -> Elemen
 // ── DropzoneArea ──────────────────────────────────────────────────────────────
 
 #[component]
-pub fn DropzoneArea(
-    #[props(into, optional)] class: Option<String>,
-    children: Element,
-) -> Element {
+pub fn DropzoneArea(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
     let ctx = use_context::<DropzoneCtx>();
     let dragging = *ctx.is_dragging.read();
 
@@ -190,24 +188,22 @@ pub fn DropzoneArea(
 // ── DropzoneIcon ──────────────────────────────────────────────────────────────
 
 #[component]
-pub fn DropzoneIcon(
-    #[props(into, optional)] class: Option<String>,
-    children: Element,
-) -> Element {
+pub fn DropzoneIcon(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
     let ctx = use_context::<DropzoneCtx>();
     let dragging = *ctx.is_dragging.read();
     let anim = if dragging { "animate-bounce" } else { "" };
-    let merged = tw_merge!("text-muted-foreground", anim, class.as_deref().unwrap_or(""));
+    let merged = tw_merge!(
+        "text-muted-foreground",
+        anim,
+        class.as_deref().unwrap_or("")
+    );
     rsx! { div { class: "{merged}", {children} } }
 }
 
 // ── DropzoneLabel ─────────────────────────────────────────────────────────────
 
 #[component]
-pub fn DropzoneLabel(
-    #[props(into, optional)] class: Option<String>,
-    children: Element,
-) -> Element {
+pub fn DropzoneLabel(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
     let merged = tw_merge!(
         "text-sm font-semibold text-foreground text-center",
         class.as_deref().unwrap_or("")
@@ -218,10 +214,7 @@ pub fn DropzoneLabel(
 // ── DropzoneHint ──────────────────────────────────────────────────────────────
 
 #[component]
-pub fn DropzoneHint(
-    #[props(into, optional)] class: Option<String>,
-    children: Element,
-) -> Element {
+pub fn DropzoneHint(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
     let merged = tw_merge!(
         "text-xs text-muted-foreground text-center",
         class.as_deref().unwrap_or("")
@@ -253,13 +246,8 @@ impl FileKind {
             | "application/gzip"
             | "application/x-7z-compressed"
             | "application/x-rar-compressed" => Self::Archive,
-            "text/javascript"
-            | "text/typescript"
-            | "text/x-rust"
-            | "text/html"
-            | "text/css"
-            | "application/json"
-            | "application/xml" => Self::Code,
+            "text/javascript" | "text/typescript" | "text/x-rust" | "text/html" | "text/css"
+            | "application/json" | "application/xml" => Self::Code,
             m if m.contains("spreadsheet") || m.contains("excel") || m == "text/csv" => {
                 Self::Spreadsheet
             }

@@ -25,7 +25,9 @@ pub fn Login() -> Element {
         let pass_val = password.read().clone();
         async move {
             match login(email_val, pass_val).await {
-                Ok(()) => { nav.push(Route::Home {}); }
+                Ok(()) => {
+                    nav.push(Route::Home {});
+                }
                 Err(e) => error.set(Some(e.to_string())),
             }
         }

@@ -37,8 +37,8 @@ fn main() {
         let session_pool = PgPool::connect(&database_url)
             .await
             .expect("Failed to connect session pool");
-        let session_table = std::env::var("SESSION_TABLE_NAME")
-            .unwrap_or_else(|_| "async_sessions".to_string());
+        let session_table =
+            std::env::var("SESSION_TABLE_NAME").unwrap_or_else(|_| "async_sessions".to_string());
         let session_config = SessionConfig::default().with_table_name(session_table);
         let auth_config = AuthConfig::<Uuid>::default();
         let session_store =

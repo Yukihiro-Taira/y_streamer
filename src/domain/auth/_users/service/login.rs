@@ -9,8 +9,7 @@ pub async fn login(email: String, password: String) -> Result<(), ServerFnError>
     use crate::domain::auth::_users::data::users_db::UsersDb;
     use crate::domain::auth::auth_context::auth;
 
-    let Extension(pool) =
-        FullstackContext::extract::<Extension<sqlx::PgPool>, _>().await?;
+    let Extension(pool) = FullstackContext::extract::<Extension<sqlx::PgPool>, _>().await?;
 
     let user = UsersDb::get_from_email(email, &pool)
         .await

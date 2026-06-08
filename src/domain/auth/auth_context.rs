@@ -2,8 +2,8 @@
 ///
 /// Dioxus uses `FullstackContext::extract` instead of Leptos's `use_context`.
 #[cfg(feature = "server")]
-pub async fn auth(
-) -> Result<crate::domain::auth::auth_session::AuthSession, dioxus::prelude::ServerFnError> {
+pub async fn auth()
+-> Result<crate::domain::auth::auth_session::AuthSession, dioxus::prelude::ServerFnError> {
     use dioxus_fullstack::FullstackContext;
 
     FullstackContext::extract::<crate::domain::auth::auth_session::AuthSession, _>()

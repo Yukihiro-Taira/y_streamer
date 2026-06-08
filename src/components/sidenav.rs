@@ -1,5 +1,7 @@
 use dioxus::prelude::*;
-use icons::{Bug, ChevronsUpDown, FlaskConical, LayoutDashboard, LogOut, ShieldCheck, UserRound, Users};
+use icons::{
+    Bug, ChevronsUpDown, FlaskConical, LayoutDashboard, LogOut, ShieldCheck, UserRound, Users,
+};
 
 use crate::app::Route;
 use crate::domain::auth::_users::data::user::User;
