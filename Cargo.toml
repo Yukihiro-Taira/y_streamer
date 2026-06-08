@@ -32,7 +32,7 @@ anyhow = { version = "1", optional = true }
 async-trait = { version = "0.1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "DragEvent", "DataTransfer", "FileList", "File"] }
+web-sys = { version = "0.3", features = ["Window", "DragEvent", "DataTransfer", "FileList", "File", "Url", "Blob"] }
 wasm-bindgen = "0.2"
 
 [features]
