@@ -254,7 +254,14 @@ impl FileKind {
     }
 
     fn icon(&self) -> Element {
-        let class = "size-4 text-muted-foreground";
+        self.icon_sized("size-4 text-muted-foreground")
+    }
+
+    fn icon_lg(&self) -> Element {
+        self.icon_sized("size-6 text-muted-foreground")
+    }
+
+    fn icon_sized(&self, class: &'static str) -> Element {
         match self {
             Self::Image => rsx! { FileImage { class } },
             Self::Audio => rsx! { FileAudio { class } },
@@ -316,6 +323,72 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
                     // Remove
                     button {
                         class: "shrink-0 size-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-base leading-none",
+                        onclick: move |_| {
+                            let mut files = ctx.files;
+                            files.write().remove(idx);
+                        },
+                        "×"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── DropzoneFileGrid ──────────────────────────────────────────────────────────
+
+#[component]
+pub fn DropzoneFileGrid(#[props(into, optional)] class: Option<String>) -> Element {
+    let ctx = use_context::<DropzoneCtx>();
+    let files = ctx.files.read();
+
+    if files.is_empty() {
+        return rsx! {};
+    }
+
+    let merged = tw_merge!(
+        "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3",
+        class.as_deref().unwrap_or("")
+    );
+
+    rsx! {
+        div { class: "{merged}",
+            for (idx, file) in files.iter().enumerate() {
+                div { class: "relative group aspect-square rounded-xl overflow-hidden bg-muted",
+                    // Media preview or icon fill
+                    if let Some(url) = &file.preview_url {
+                        if file.mime_type.starts_with("video/") {
+                            video {
+                                src: "{url}",
+                                class: "absolute inset-0 w-full h-full object-cover",
+                                preload: "metadata",
+                            }
+                        } else {
+                            img {
+                                src: "{url}",
+                                class: "absolute inset-0 w-full h-full object-cover",
+                            }
+                        }
+                    } else {
+                        div { class: "absolute inset-0 flex flex-col items-center justify-center gap-2",
+                            div { class: "size-10 rounded-lg bg-background/60 flex items-center justify-center",
+                                {FileKind::from_mime(&file.mime_type).icon_lg()}
+                            }
+                            if file.mime_type == "application/pdf" {
+                                span { class: "text-[9px] font-bold bg-red-500 text-white rounded px-1.5 py-0.5 leading-tight",
+                                    "PDF"
+                                }
+                            }
+                        }
+                    }
+                    // Hover overlay — name + size
+                    div { class: "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent pt-6 pb-2 px-2 translate-y-full group-hover:translate-y-0 transition-transform duration-200",
+                        p { class: "text-xs font-medium text-white truncate", "{file.name}" }
+                        p { class: "text-[10px] text-white/70", "{file.size_display()}" }
+                    }
+                    // Remove button
+                    button {
+                        class: "absolute top-1.5 right-1.5 size-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-200 leading-none",
                         onclick: move |_| {
                             let mut files = ctx.files;
                             files.write().remove(idx);
