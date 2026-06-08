@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use icons::FileText;
+use icons::{FileArchive, FileAudio, FileCode, FileImage, FileJson, FileSpreadsheet, FileText};
 use tw_merge::tw_merge;
 
 // ── File type ─────────────────────────────────────────────────────────────────
@@ -214,6 +214,51 @@ pub fn DropzoneHint(
     rsx! { p { class: "{merged}", {children} } }
 }
 
+// ── File type icon helper ─────────────────────────────────────────────────────
+
+fn file_type_icon(mime: &str) -> Element {
+    let class = "size-4 text-muted-foreground";
+    if mime.starts_with("audio/") {
+        rsx! { FileAudio { class } }
+    } else if mime.starts_with("image/") {
+        rsx! { FileImage { class } }
+    } else if mime == "application/pdf" {
+        rsx! { FileText { class } }
+    } else if mime == "application/zip"
+        || mime == "application/x-tar"
+        || mime == "application/gzip"
+        || mime == "application/x-7z-compressed"
+        || mime == "application/x-rar-compressed"
+    {
+        rsx! { FileArchive { class } }
+    } else if mime.starts_with("text/")
+        || mime == "application/json"
+        || mime == "application/xml"
+    {
+        let is_code = matches!(
+            mime,
+            "text/javascript"
+                | "text/typescript"
+                | "text/x-rust"
+                | "text/html"
+                | "text/css"
+                | "application/json"
+                | "application/xml"
+        );
+        if is_code {
+            rsx! { FileCode { class } }
+        } else {
+            rsx! { FileText { class } }
+        }
+    } else if mime.contains("spreadsheet") || mime.contains("excel") || mime == "text/csv" {
+        rsx! { FileSpreadsheet { class } }
+    } else if mime.contains("json") {
+        rsx! { FileJson { class } }
+    } else {
+        rsx! { FileText { class } }
+    }
+}
+
 // ── DropzoneFileList ──────────────────────────────────────────────────────────
 
 #[component]
@@ -246,8 +291,14 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
                             }
                         }
                     } else {
-                        div { class: "size-10 rounded bg-muted flex items-center justify-center shrink-0",
-                            FileText { class: "size-4 text-muted-foreground" }
+                        div { class: "size-10 rounded bg-muted flex items-center justify-center shrink-0 relative",
+                            {file_type_icon(&file.mime_type)}
+                            // PDF badge
+                            if file.mime_type == "application/pdf" {
+                                span { class: "absolute -bottom-1 -right-1 text-[8px] font-bold bg-red-500 text-white rounded px-[3px] leading-tight",
+                                    "PDF"
+                                }
+                            }
                         }
                     }
                     // Name + size
