@@ -41,21 +41,30 @@ pub fn Dropzone(children: Element) -> Element {
 
     use_context_provider(|| DropzoneCtx { files, is_dragging });
 
+    #[cfg(not(target_arch = "wasm32"))]
+    return rsx! { div { {children} } };
+
     #[cfg(target_arch = "wasm32")]
     {
         let mut drag_count = use_signal(|| 0u32);
 
-        use_effect(move || {
+        let on_mounted = move |event: dioxus::prelude::MountedEvent| {
             use wasm_bindgen::closure::Closure;
             use wasm_bindgen::JsCast;
 
+            let Ok(raw) = event.get_raw_element() else { return };
+            let Some(el) = raw.downcast_ref::<web_sys::Element>() else { return };
+            let el = el.clone();
+
+            // window dragover — only to prevent browser from opening the file
             let win = web_sys::window().expect("no window");
-
             let on_dragover: Closure<dyn Fn(web_sys::DragEvent)> =
-                Closure::new(move |e: web_sys::DragEvent| {
-                    e.prevent_default();
-                });
+                Closure::new(|e: web_sys::DragEvent| e.prevent_default());
+            win.add_event_listener_with_callback("dragover", on_dragover.as_ref().unchecked_ref())
+                .ok();
+            on_dragover.forget();
 
+            // dragenter / dragleave / drop scoped to this element
             let on_dragenter: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
@@ -65,7 +74,14 @@ pub fn Dropzone(children: Element) -> Element {
                         is_dragging.set(true);
                     }
                 });
+            el.add_event_listener_with_callback(
+                "dragenter",
+                on_dragenter.as_ref().unchecked_ref(),
+            )
+            .ok();
+            on_dragenter.forget();
 
+            let el2 = el.clone();
             let on_dragleave: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
@@ -75,7 +91,14 @@ pub fn Dropzone(children: Element) -> Element {
                         is_dragging.set(false);
                     }
                 });
+            el2.add_event_listener_with_callback(
+                "dragleave",
+                on_dragleave.as_ref().unchecked_ref(),
+            )
+            .ok();
+            on_dragleave.forget();
 
+            let el3 = el.clone();
             let on_drop: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
@@ -90,11 +113,12 @@ pub fn Dropzone(children: Element) -> Element {
                     for i in 0..file_list.length() {
                         if let Some(f) = file_list.item(i) {
                             let mime = f.type_();
-                            let preview_url = if mime.starts_with("image/") || mime.starts_with("video/") {
-                                web_sys::Url::create_object_url_with_blob(&f).ok()
-                            } else {
-                                None
-                            };
+                            let preview_url =
+                                if mime.starts_with("image/") || mime.starts_with("video/") {
+                                    web_sys::Url::create_object_url_with_blob(&f).ok()
+                                } else {
+                                    None
+                                };
                             dropped.push(DropzoneFile {
                                 name: f.name(),
                                 size_bytes: f.size() as u64,
@@ -105,24 +129,15 @@ pub fn Dropzone(children: Element) -> Element {
                     }
                     files.set(dropped);
                 });
-
-            win.add_event_listener_with_callback("dragover", on_dragover.as_ref().unchecked_ref())
+            el3.add_event_listener_with_callback("drop", on_drop.as_ref().unchecked_ref())
                 .ok();
-            win.add_event_listener_with_callback("dragenter", on_dragenter.as_ref().unchecked_ref())
-                .ok();
-            win.add_event_listener_with_callback("dragleave", on_dragleave.as_ref().unchecked_ref())
-                .ok();
-            win.add_event_listener_with_callback("drop", on_drop.as_ref().unchecked_ref())
-                .ok();
-
-            on_dragover.forget();
-            on_dragenter.forget();
-            on_dragleave.forget();
             on_drop.forget();
-        });
-    }
+        };
 
-    rsx! { {children} }
+        rsx! {
+            div { onmounted: on_mounted, {children} }
+        }
+    }
 }
 
 // ── DropzoneOverlay ───────────────────────────────────────────────────────────
