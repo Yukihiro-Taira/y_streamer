@@ -4522,6 +4522,8 @@ dependencies = [
  "tracing",
  "tw_merge",
  "uuid",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

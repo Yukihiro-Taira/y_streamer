@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use icons::{Bug, ChevronsUpDown, LayoutDashboard, LogOut, ShieldCheck, UserRound, Users};
+use icons::{Bug, ChevronsUpDown, FlaskConical, LayoutDashboard, LogOut, ShieldCheck, UserRound, Users};
 
 use crate::app::Route;
 use crate::domain::auth::_users::data::user::User;
@@ -71,6 +71,9 @@ pub fn Sidenav(user: User, open: bool) -> Element {
                     }
                     NavItem { to: Route::DashboardProfile {}, label: "Profile", open,
                         UserRound { class: "size-4 shrink-0" }
+                    }
+                    NavItem { to: Route::DashboardTest {}, label: "File Drop Test", open,
+                        FlaskConical { class: "size-4 shrink-0" }
                     }
                 }
             }

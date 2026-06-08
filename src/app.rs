@@ -9,6 +9,7 @@ use crate::domain::auth::routing::login_page::Login;
 use crate::domain::auth::routing::profile_page::ProfilePage;
 use crate::domain::auth::routing::users_page::UsersPage;
 use crate::domain::bugreports::routing::bugreports_page::BugReportsPage;
+use crate::domain::test::routing::test_page::TestPage;
 
 const TAILWIND_CSS: Asset = asset!("/public/tailwind.css");
 
@@ -36,6 +37,9 @@ pub enum Route {
 
         #[route("/dashboard/access-demo")]
         DashboardAccessDemo {},
+
+        #[route("/dashboard/test")]
+        DashboardTest {},
     #[end_layout]
 
     #[route("/:..route")]
@@ -65,6 +69,7 @@ fn DashboardShell() -> Element {
         Route::DashboardBugReports {} => "Bug Reports",
         Route::DashboardProfile {} => "Profile",
         Route::DashboardAccessDemo {} => "Access Demo",
+        Route::DashboardTest {} => "File Drop Test",
         _ => "Dashboard",
     };
 
@@ -134,6 +139,11 @@ fn DashboardProfile() -> Element {
 #[component]
 fn DashboardAccessDemo() -> Element {
     rsx! { AccessDemoPage {} }
+}
+
+#[component]
+fn DashboardTest() -> Element {
+    rsx! { TestPage {} }
 }
 
 #[component]
