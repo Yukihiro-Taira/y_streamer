@@ -38,9 +38,10 @@ pub enum Route {
         #[route("/dashboard/access-demo")]
         DashboardAccessDemo {},
 
-        #[route("/dashboard/test")]
-        DashboardTest {},
     #[end_layout]
+
+    #[route("/test-page")]
+    TestPageRoute {},
 
     #[route("/:..route")]
     NotFound { route: Vec<String> },
@@ -69,7 +70,6 @@ fn DashboardShell() -> Element {
         Route::DashboardBugReports {} => "Bug Reports",
         Route::DashboardProfile {} => "Profile",
         Route::DashboardAccessDemo {} => "Access Demo",
-        Route::DashboardTest {} => "File Drop Test",
         _ => "Dashboard",
     };
 
@@ -142,7 +142,7 @@ fn DashboardAccessDemo() -> Element {
 }
 
 #[component]
-fn DashboardTest() -> Element {
+fn TestPageRoute() -> Element {
     rsx! { TestPage {} }
 }
 
