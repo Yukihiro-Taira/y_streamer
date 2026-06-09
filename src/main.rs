@@ -25,7 +25,7 @@ fn main() {
         };
         use crate::domain::media_write::service::{
             media_write_artifact_download_handler, media_write_compress_handler,
-            media_write_upload_limit_bytes,
+            media_write_transcode_handler, media_write_upload_limit_bytes,
         };
 
         dotenv::dotenv().ok();
@@ -73,6 +73,12 @@ fn main() {
             .route(
                 "/api/media-write/compress",
                 post(media_write_compress_handler).layer(axum::extract::DefaultBodyLimit::max(
+                    media_write_upload_limit_bytes(),
+                )),
+            )
+            .route(
+                "/api/media-write/transcode",
+                post(media_write_transcode_handler).layer(axum::extract::DefaultBodyLimit::max(
                     media_write_upload_limit_bytes(),
                 )),
             )
