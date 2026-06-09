@@ -9,6 +9,7 @@ use crate::domain::auth::routing::login_page::Login;
 use crate::domain::auth::routing::profile_page::ProfilePage;
 use crate::domain::auth::routing::users_page::UsersPage;
 use crate::domain::bugreports::routing::bugreports_page::BugReportsPage;
+use crate::domain::media_jobs::routing::media_jobs_page::MediaJobsPage;
 use crate::domain::test::routing::test_page::TestPage;
 
 const TAILWIND_CSS: Asset = asset!("/public/tailwind.css");
@@ -42,6 +43,9 @@ pub enum Route {
 
     #[route("/test-page")]
     TestPageRoute {},
+
+    #[route("/test-media-jobs")]
+    TestMediaJobsRoute {},
 
     #[route("/:..route")]
     NotFound { route: Vec<String> },
@@ -144,6 +148,11 @@ fn DashboardAccessDemo() -> Element {
 #[component]
 fn TestPageRoute() -> Element {
     rsx! { TestPage {} }
+}
+
+#[component]
+fn TestMediaJobsRoute() -> Element {
+    rsx! { MediaJobsPage {} }
 }
 
 #[component]
