@@ -10,6 +10,7 @@ fn main() {
 
     #[cfg(feature = "server")]
     dioxus::serve(|| async {
+        use axum::extract::DefaultBodyLimit;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::{AuthConfig, AuthSessionLayer};
         use axum_session_sqlx::SessionPgPool;
@@ -47,6 +48,9 @@ fn main() {
                 .expect("Failed to create session store");
 
         Ok(dioxus::server::router(App)
+            // Media inspection uploads send raw file bytes through a server function.
+            // Raise the default body limit so moderately large local files can reach ffprobe.
+            .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
             .layer(Extension(pool.clone()))
             .layer(
                 AuthSessionLayer::<User, Uuid, SessionPgPool, PgPool>::new(Some(pool))
