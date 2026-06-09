@@ -20,12 +20,16 @@ fn main() {
         use uuid::Uuid;
 
         use crate::domain::auth::_users::data::user::User;
-        use crate::domain::media_inspector::service::inspect_media_upload::{
+        use crate::domain::media_inspector::service::{
             media_inspector_upload_handler, media_inspector_upload_limit_bytes,
         };
 
         dotenv::dotenv().ok();
         let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "video_platform_app=info,axum=info".into()),
+            )
             .with_target(true)
             .with_thread_ids(true)
             .with_level(true)

@@ -2,8 +2,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct MediaProbeReport {
+    pub trace_id: String,
     pub file_name: String,
     pub path_hint: String,
+    pub upload_bytes: u64,
+    pub processing_time_ms: u64,
+    pub ffprobe_timeout_secs: u64,
     pub format_name: String,
     pub format_long_name: String,
     pub duration: String,
@@ -22,6 +26,13 @@ pub struct MediaProbeReport {
     pub streams: Vec<MediaStreamInfo>,
     pub chapters: Vec<MediaChapterInfo>,
     pub raw_json_pretty: String,
+}
+
+#[cfg_attr(not(any(feature = "server", target_arch = "wasm32")), allow(dead_code))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct MediaProbeErrorResponse {
+    pub trace_id: String,
+    pub message: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
