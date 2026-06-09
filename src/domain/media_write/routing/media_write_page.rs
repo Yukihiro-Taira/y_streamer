@@ -235,8 +235,9 @@ pub fn MediaWritePage() -> Element {
                                     p { class: "text-xs text-muted-foreground", "Reading metadata..." }
                                 } else if read_report().is_some() {
                                     div { class: "flex flex-col gap-2 sm:flex-row",
-                                        Button {
-                                            class: "bg-green-600 text-white hover:bg-green-700",
+                                        button {
+                                            class: "inline-flex h-9 items-center justify-center rounded-md border border-green-500 bg-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:pointer-events-none disabled:opacity-50",
+                                            r#type: "button",
                                             disabled: write_loading(),
                                             onclick: move |_| run_job(MediaWriteOperation::Compress),
                                             if write_loading() && operation() == MediaWriteOperation::Compress {
@@ -245,8 +246,9 @@ pub fn MediaWritePage() -> Element {
                                                 "Compress Video"
                                             }
                                         }
-                                        Button {
-                                            variant: ButtonVariant::Outline,
+                                        button {
+                                            class: "inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50",
+                                            r#type: "button",
                                             disabled: write_loading(),
                                             onclick: move |_| run_job(MediaWriteOperation::Transcode),
                                             if write_loading() && operation() == MediaWriteOperation::Transcode {

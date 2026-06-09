@@ -122,8 +122,8 @@ fn VideoFileCard(file: crate::components::ui::dropzone::DropzoneFile) -> Element
                                 value: format!("{} x {}", details.width, details.height),
                             }
                         } else {
-                            InfoRow { label: "Duration", value: "Loading...".into() }
-                            InfoRow { label: "Resolution", value: "Loading...".into() }
+                            InfoRow { label: "Duration", value: "Loading...".to_string() }
+                            InfoRow { label: "Resolution", value: "Loading...".to_string() }
                         }
                     }
                 }
@@ -134,18 +134,20 @@ fn VideoFileCard(file: crate::components::ui::dropzone::DropzoneFile) -> Element
 
 #[cfg(target_arch = "wasm32")]
 #[component]
-fn VideoPreview(url: String, mut details_signal: Signal<Option<VideoMetadata>>) -> Element {
+fn VideoPreview(url: String, details_signal: Signal<Option<VideoMetadata>>) -> Element {
     let onmounted = move |event: dioxus::prelude::MountedEvent| {
         use wasm_bindgen::JsCast;
         use wasm_bindgen::closure::Closure;
 
-        let Ok(raw) = event.get_raw_element() else {
+        let mounted = event.data();
+        let Some(raw) = mounted.downcast::<web_sys::Element>() else {
             return;
         };
-        let Some(video) = raw.downcast_ref::<web_sys::HtmlVideoElement>() else {
+        let Some(video) = raw.dyn_ref::<web_sys::HtmlVideoElement>() else {
             return;
         };
         let video = video.clone();
+        let mut details_signal = details_signal;
 
         let capture = video.clone();
         let on_loaded: Closure<dyn FnMut(web_sys::Event)> =
@@ -177,7 +179,8 @@ fn VideoPreview(url: String, mut details_signal: Signal<Option<VideoMetadata>>) 
 
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
-fn VideoPreview(url: String, _details_signal: Signal<Option<VideoMetadata>>) -> Element {
+fn VideoPreview(url: String, details_signal: Signal<Option<VideoMetadata>>) -> Element {
+    let _ = details_signal;
     rsx! {
         video {
             class: "aspect-video w-full object-cover",

@@ -52,13 +52,11 @@ pub fn Dropzone(children: Element) -> Element {
             use wasm_bindgen::JsCast;
             use wasm_bindgen::closure::Closure;
 
-            let Ok(raw) = event.get_raw_element() else {
+            let mounted = event.data();
+            let Some(raw) = mounted.downcast::<web_sys::Element>() else {
                 return;
             };
-            let Some(el) = raw.downcast_ref::<web_sys::Element>() else {
-                return;
-            };
-            let el = el.clone();
+            let el = raw.clone();
 
             // window dragover — only to prevent browser from opening the file
             let win = web_sys::window().expect("no window");
