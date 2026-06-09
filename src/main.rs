@@ -6,7 +6,10 @@ use app::App;
 
 fn main() {
     #[cfg(not(feature = "server"))]
-    dioxus::launch(App);
+    {
+        init_client_debugging();
+        dioxus::launch(App);
+    }
 
     #[cfg(feature = "server")]
     dioxus::serve(|| async {
@@ -92,5 +95,24 @@ fn main() {
                     .with_config(auth_config),
             )
             .layer(SessionLayer::new(session_store)))
+    });
+}
+
+#[cfg(not(feature = "server"))]
+fn init_client_debugging() {
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        std::panic::set_hook(Box::new(|panic_info| {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::error_1(&format!("panic on web client: {panic_info}").into());
+
+            #[cfg(not(target_arch = "wasm32"))]
+            eprintln!("panic on client: {panic_info}");
+        }));
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"web client debug hook installed".into());
     });
 }
