@@ -12,7 +12,7 @@ use crate::domain::bugreports::routing::bugreports_page::BugReportsPage;
 use crate::domain::media_write::routing::media_write_page::MediaWritePage;
 use crate::domain::test::routing::test_page::TestPage;
 
-const TAILWIND_CSS: Asset = asset!("/public/tailwind.css");
+const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
@@ -54,7 +54,7 @@ pub enum Route {
 #[component]
 pub fn App() -> Element {
     rsx! {
-        document::Link { rel: "stylesheet", href: TAILWIND_CSS }
+        document::Stylesheet { href: TAILWIND_CSS }
         Router::<Route> {}
     }
 }

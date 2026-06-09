@@ -1,16 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@source "../src/**/*.rs";
+@source "./src/**/*.rs";
 
 @custom-variant dark (&:is(.dark *));
-
 
 ::selection {
   background: rgb(155, 106, 8);
   color: white;
 }
-
 
 :root {
   --radius: 0.625rem;
@@ -59,7 +57,6 @@
   --ring: oklch(0.556 0 0);
 }
 
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -92,6 +89,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -100,7 +98,7 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
-  
+
   dialog {
     margin: auto;
   }
