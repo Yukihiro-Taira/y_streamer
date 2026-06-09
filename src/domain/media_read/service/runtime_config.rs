@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 #[cfg(feature = "server")]
 #[derive(Clone, Debug)]
-pub(crate) struct MediaInspectorRuntimeConfig {
+pub(crate) struct MediaReadRuntimeConfig {
     pub(crate) max_upload_bytes: usize,
     pub(crate) ffprobe_timeout_secs: u64,
     pub(crate) temp_dir: PathBuf,
@@ -11,7 +11,7 @@ pub(crate) struct MediaInspectorRuntimeConfig {
 }
 
 #[cfg(feature = "server")]
-impl MediaInspectorRuntimeConfig {
+impl MediaReadRuntimeConfig {
     pub(crate) fn from_env() -> Self {
         Self {
             max_upload_bytes: read_usize_env("MEDIA_INSPECTOR_MAX_UPLOAD_BYTES")

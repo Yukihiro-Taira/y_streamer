@@ -7,11 +7,11 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 #[cfg(target_arch = "wasm32")]
-use crate::domain::media_inspector::data::media_probe_report::MediaProbeErrorResponse;
-use crate::domain::media_inspector::data::media_probe_report::MediaProbeReport;
+use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
+use crate::domain::media_read::data::media_probe_report::MediaProbeReport;
 
 #[component]
-pub fn MediaInspectorPage() -> Element {
+pub fn MediaReadPage() -> Element {
     let mut selected_name = use_signal(|| None::<String>);
     let mut report = use_signal(|| None::<MediaProbeReport>);
     let mut error = use_signal(|| None::<String>);
@@ -56,9 +56,9 @@ pub fn MediaInspectorPage() -> Element {
         div { class: "max-w-[1100px] mx-auto w-full px-6 py-8 space-y-6",
             Card {
                 CardHeader {
-                    CardTitle { "Media Inspector" }
+                    CardTitle { "Media Read" }
                     CardDescription {
-                        "Upload a local media file. The browser sends the bytes to the Rust server, which runs ffprobe and returns a structured report."
+                        "Upload a local media file. The browser sends the bytes to the Rust server, which runs ffprobe and returns the raw metadata report."
                     }
                 }
                 CardContent { class: "space-y-4",
@@ -97,7 +97,7 @@ pub fn MediaInspectorPage() -> Element {
             }
 
             if let Some(result) = report() {
-                MediaInspectorReport { report: result }
+                MediaReadReport { report: result }
             }
         }
     }
@@ -121,9 +121,8 @@ async fn upload_media_file(file: dioxus::html::FileData) -> Result<MediaProbeRep
         options.set_method("POST");
         options.set_body(&form_data);
 
-        let request =
-            web_sys::Request::new_with_str_and_init("/api/media-inspector/upload", &options)
-                .map_err(js_error)?;
+        let request = web_sys::Request::new_with_str_and_init("/api/media-read/upload", &options)
+            .map_err(js_error)?;
         request
             .headers()
             .set("Accept", "application/json")
@@ -172,7 +171,7 @@ fn js_error(err: wasm_bindgen::JsValue) -> String {
 }
 
 #[component]
-fn MediaInspectorReport(report: MediaProbeReport) -> Element {
+fn MediaReadReport(report: MediaProbeReport) -> Element {
     rsx! {
         Card {
             CardHeader {
@@ -180,7 +179,7 @@ fn MediaInspectorReport(report: MediaProbeReport) -> Element {
                 CardDescription { "{report.file_name} [{report.trace_id}]" }
             }
             CardContent {
-                pre { class: "max-h-[80vh] overflow-auto rounded-xl bg-muted/30 p-4 font-mono text-xs leading-5 whitespace-pre-wrap break-all",
+                pre { class: "max-h-[300px] overflow-auto rounded-xl bg-muted/30 p-4 font-mono text-xs leading-5 whitespace-pre-wrap break-all",
                     "{report.raw_json_pretty}"
                 }
             }

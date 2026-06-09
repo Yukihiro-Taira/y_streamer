@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::data::media_probe_report::{
+use crate::domain::media_read::data::media_probe_report::{
     MediaChapterInfo, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
 

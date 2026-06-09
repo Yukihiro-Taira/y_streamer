@@ -2,17 +2,17 @@
 use std::path::Path;
 
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::data::media_probe_report::MediaProbeReport;
+use crate::domain::media_read::data::media_probe_report::MediaProbeReport;
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::service::ffprobe_mapper::{
+use crate::domain::media_read::service::ffprobe_mapper::{
     map_ffprobe_report, parse_ffprobe_output,
 };
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::service::runtime_config::MediaInspectorRuntimeConfig;
+use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
 
 #[cfg(feature = "server")]
 pub(crate) async fn inspect_media_path(
-    config: &MediaInspectorRuntimeConfig,
+    config: &MediaReadRuntimeConfig,
     path: &Path,
     file_name: &str,
     trace_id: &str,
@@ -26,7 +26,7 @@ pub(crate) async fn inspect_media_path(
 
     #[instrument(skip_all, fields(path = %path.display(), ffprobe_bin = %config.ffprobe_bin))]
     async fn run_ffprobe(
-        config: &MediaInspectorRuntimeConfig,
+        config: &MediaReadRuntimeConfig,
         path: &Path,
     ) -> anyhow::Result<std::process::Output> {
         let mut command = Command::new(&config.ffprobe_bin);

@@ -9,7 +9,7 @@ use crate::domain::auth::routing::login_page::Login;
 use crate::domain::auth::routing::profile_page::ProfilePage;
 use crate::domain::auth::routing::users_page::UsersPage;
 use crate::domain::bugreports::routing::bugreports_page::BugReportsPage;
-use crate::domain::media_jobs::routing::media_jobs_page::MediaJobsPage;
+use crate::domain::media_write::routing::media_write_page::MediaWritePage;
 use crate::domain::test::routing::test_page::TestPage;
 
 const TAILWIND_CSS: Asset = asset!("/public/tailwind.css");
@@ -152,7 +152,7 @@ fn TestPageRoute() -> Element {
 
 #[component]
 fn TestMediaJobsRoute() -> Element {
-    rsx! { MediaJobsPage {} }
+    rsx! { MediaWritePage {} }
 }
 
 #[component]

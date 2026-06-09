@@ -10,7 +10,7 @@ fn main() {
 
     #[cfg(feature = "server")]
     dioxus::serve(|| async {
-        use axum::routing::post;
+        use axum::routing::{get, post};
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::{AuthConfig, AuthSessionLayer};
         use axum_session_sqlx::SessionPgPool;
@@ -20,8 +20,12 @@ fn main() {
         use uuid::Uuid;
 
         use crate::domain::auth::_users::data::user::User;
-        use crate::domain::media_inspector::service::{
-            media_inspector_upload_handler, media_inspector_upload_limit_bytes,
+        use crate::domain::media_read::service::{
+            media_read_upload_handler, media_read_upload_limit_bytes,
+        };
+        use crate::domain::media_write::service::{
+            media_write_artifact_download_handler, media_write_compress_handler,
+            media_write_upload_limit_bytes,
         };
 
         dotenv::dotenv().ok();
@@ -61,10 +65,20 @@ fn main() {
 
         Ok(dioxus::server::router(App)
             .route(
-                "/api/media-inspector/upload",
-                post(media_inspector_upload_handler).layer(axum::extract::DefaultBodyLimit::max(
-                    media_inspector_upload_limit_bytes(),
+                "/api/media-read/upload",
+                post(media_read_upload_handler).layer(axum::extract::DefaultBodyLimit::max(
+                    media_read_upload_limit_bytes(),
                 )),
+            )
+            .route(
+                "/api/media-write/compress",
+                post(media_write_compress_handler).layer(axum::extract::DefaultBodyLimit::max(
+                    media_write_upload_limit_bytes(),
+                )),
+            )
+            .route(
+                "/api/media-write/artifacts/{artifact_id}",
+                get(media_write_artifact_download_handler),
             )
             .layer(Extension(pool.clone()))
             .layer(

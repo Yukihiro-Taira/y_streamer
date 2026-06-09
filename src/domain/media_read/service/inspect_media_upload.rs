@@ -2,21 +2,21 @@
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::data::media_probe_report::{
+use crate::domain::media_read::data::media_probe_report::{
     MediaProbeErrorResponse, MediaProbeReport,
 };
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::service::ffprobe_runner::inspect_media_path;
+use crate::domain::media_read::service::ffprobe_runner::inspect_media_path;
 #[cfg(feature = "server")]
-use crate::domain::media_inspector::service::runtime_config::MediaInspectorRuntimeConfig;
+use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
 
 #[cfg(feature = "server")]
-pub fn media_inspector_upload_limit_bytes() -> usize {
-    MediaInspectorRuntimeConfig::from_env().max_upload_bytes
+pub fn media_read_upload_limit_bytes() -> usize {
+    MediaReadRuntimeConfig::from_env().max_upload_bytes
 }
 
 #[cfg(feature = "server")]
-pub async fn media_inspector_upload_handler(
+pub async fn media_read_upload_handler(
     mut multipart: axum::extract::Multipart,
 ) -> Result<
     axum::Json<MediaProbeReport>,
@@ -26,11 +26,11 @@ pub async fn media_inspector_upload_handler(
     use tokio::io::AsyncWriteExt;
     use tracing::{Instrument, error, info, info_span, warn};
 
-    let config = MediaInspectorRuntimeConfig::from_env();
+    let config = MediaReadRuntimeConfig::from_env();
     let started_at = std::time::Instant::now();
     let trace_id = uuid::Uuid::new_v4().to_string();
     let span = info_span!(
-        "media_inspector_upload",
+        "media_read_upload",
         trace_id = %trace_id,
         ffprobe_timeout_secs = config.ffprobe_timeout_secs,
         max_upload_bytes = config.max_upload_bytes
@@ -184,9 +184,7 @@ fn make_temp_media_path(temp_dir: &Path, file_name: &str, trace_id: &str) -> Pat
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "upload".into());
 
-    temp_dir.join(format!(
-        "media-inspector-{trace_id}-{safe_stem}.{extension}"
-    ))
+    temp_dir.join(format!("media-read-{trace_id}-{safe_stem}.{extension}"))
 }
 
 #[cfg(feature = "server")]
