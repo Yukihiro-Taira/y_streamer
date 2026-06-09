@@ -10,7 +10,7 @@ fn main() {
 
     #[cfg(feature = "server")]
     dioxus::serve(|| async {
-        use axum::extract::DefaultBodyLimit;
+        use axum::routing::post;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::{AuthConfig, AuthSessionLayer};
         use axum_session_sqlx::SessionPgPool;
@@ -20,8 +20,16 @@ fn main() {
         use uuid::Uuid;
 
         use crate::domain::auth::_users::data::user::User;
+        use crate::domain::media_inspector::service::inspect_media_upload::{
+            media_inspector_upload_handler, media_inspector_upload_limit_bytes,
+        };
 
         dotenv::dotenv().ok();
+        let _ = tracing_subscriber::fmt()
+            .with_target(true)
+            .with_thread_ids(true)
+            .with_level(true)
+            .try_init();
 
         let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         let pool = PgPoolOptions::new()
@@ -48,9 +56,12 @@ fn main() {
                 .expect("Failed to create session store");
 
         Ok(dioxus::server::router(App)
-            // Media inspection uploads send raw file bytes through a server function.
-            // Raise the default body limit so moderately large local files can reach ffprobe.
-            .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
+            .route(
+                "/api/media-inspector/upload",
+                post(media_inspector_upload_handler).layer(axum::extract::DefaultBodyLimit::max(
+                    media_inspector_upload_limit_bytes(),
+                )),
+            )
             .layer(Extension(pool.clone()))
             .layer(
                 AuthSessionLayer::<User, Uuid, SessionPgPool, PgPool>::new(Some(pool))

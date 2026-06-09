@@ -25,7 +25,7 @@ tracing = "0.1"
 
 # Server-only
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "time"], optional = true }
-axum = { version = "0.8", optional = true }
+axum = { version = "0.8", features = ["multipart"], optional = true }
 axum_session = { version = "0.16", optional = true }
 axum_session_auth = { version = "0.16", optional = true }
 axum_session_sqlx = { version = "0.5", optional = true }
@@ -33,10 +33,13 @@ pwhash = { version = "1", optional = true }
 dotenv = { version = "0.15", optional = true }
 anyhow = { version = "1", optional = true }
 async-trait = { version = "0.1", optional = true }
+tokio = { version = "1", features = ["fs", "io-util", "process", "rt"], optional = true }
+tracing-subscriber = { version = "0.3", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "DragEvent", "DataTransfer", "FileList", "File", "Url", "Blob", "Element", "Event", "EventTarget", "HtmlVideoElement"] }
+web-sys = { version = "0.3", features = ["Window", "DragEvent", "DataTransfer", "FileList", "File", "Url", "Blob", "Element", "Event", "EventTarget", "HtmlVideoElement", "FormData", "Request", "RequestInit", "Response", "Headers"] }
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 
 [features]
 default = ["web"]
@@ -52,5 +55,7 @@ server = [
     "dep:dotenv",
     "dep:anyhow",
     "dep:async-trait",
+    "dep:tokio",
+    "dep:tracing-subscriber",
 ]
 web = ["dioxus/web"]

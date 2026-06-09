@@ -1,65 +1,172 @@
 #[cfg(feature = "server")]
 use std::path::Path;
-#[cfg(feature = "server")]
-use std::process::Command;
 
-use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use serde::Deserialize;
 #[cfg(feature = "server")]
 use serde_json::Value;
 
-use crate::domain::media_inspector::data::media_probe_report::MediaProbeReport;
 #[cfg(feature = "server")]
 use crate::domain::media_inspector::data::media_probe_report::{
-    MediaChapterInfo, MediaKeyValue, MediaStreamInfo,
+    MediaChapterInfo, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
 
-#[server]
-pub async fn inspect_media_upload(
-    file_name: String,
-    bytes: Vec<u8>,
-) -> Result<MediaProbeReport, ServerFnError> {
-    #[cfg(not(feature = "server"))]
-    {
-        let _ = (file_name, bytes);
-        Err(ServerFnError::new(
-            "media inspection is only available on the server",
-        ))
-    }
+#[cfg(feature = "server")]
+pub fn media_inspector_upload_limit_bytes() -> usize {
+    const DEFAULT_LIMIT: usize = 1024 * 1024 * 1024;
 
-    #[cfg(feature = "server")]
-    {
-        let temp_path = make_temp_media_path(&file_name);
-
-        std::fs::write(&temp_path, bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
-
-        let probe_result = inspect_media_path(&temp_path, &file_name);
-        let _ = std::fs::remove_file(&temp_path);
-
-        probe_result.map_err(|e| ServerFnError::new(e.to_string()))
-    }
+    std::env::var("MEDIA_INSPECTOR_MAX_UPLOAD_BYTES")
+        .ok()
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_LIMIT)
 }
 
 #[cfg(feature = "server")]
-fn inspect_media_path(path: &std::path::Path, file_name: &str) -> anyhow::Result<MediaProbeReport> {
-    use anyhow::{Context, anyhow};
+pub async fn media_inspector_upload_handler(
+    mut multipart: axum::extract::Multipart,
+) -> Result<axum::Json<MediaProbeReport>, (axum::http::StatusCode, String)> {
+    use axum::http::StatusCode;
+    use tokio::fs::File;
+    use tokio::io::AsyncWriteExt;
+    use tracing::{Instrument, error, info, info_span, warn};
 
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            "-show_chapters",
-            "-show_programs",
-            "-show_stream_groups",
-        ])
-        .arg(path)
-        .output()
-        .context("failed to launch ffprobe")?;
+    let started_at = std::time::Instant::now();
+    let upload_id = uuid::Uuid::new_v4().to_string();
+    let span = info_span!("media_inspector_upload", upload_id = %upload_id);
+
+    async move {
+        info!("upload started");
+
+        while let Some(field) = multipart
+            .next_field()
+            .await
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+        {
+            let field_name = field.name().map(str::to_owned).unwrap_or_default();
+            if field_name != "file" {
+                warn!(field_name = %field_name, "ignoring non-file multipart field");
+                continue;
+            }
+
+            let file_name = field
+                .file_name()
+                .map(str::to_owned)
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "upload.bin".into());
+            let content_type = field
+                .content_type()
+                .map(str::to_owned)
+                .unwrap_or_else(|| "application/octet-stream".into());
+
+            let temp_path = make_temp_media_path(&file_name);
+            let mut output = File::create(&temp_path)
+                .await
+                .map_err(internal_error("failed to create temp upload file"))?;
+
+            let mut field = field;
+            let mut stored_bytes: u64 = 0;
+            let mut chunk_count: u64 = 0;
+
+            info!(
+                file_name = %file_name,
+                content_type = %content_type,
+                temp_path = %temp_path.display(),
+                "streaming upload into temp file"
+            );
+
+            while let Some(chunk) = field
+                .chunk()
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+            {
+                stored_bytes += chunk.len() as u64;
+                chunk_count += 1;
+                output
+                    .write_all(&chunk)
+                    .await
+                    .map_err(internal_error("failed to write upload chunk"))?;
+            }
+
+            output
+                .flush()
+                .await
+                .map_err(internal_error("failed to flush temp upload file"))?;
+            drop(output);
+
+            info!(
+                file_name = %file_name,
+                content_type = %content_type,
+                stored_bytes,
+                chunk_count,
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                "upload fully written; starting ffprobe"
+            );
+
+            let inspection = inspect_media_path(&temp_path, &file_name)
+                .await
+                .map_err(|err| {
+                    error!(file_name = %file_name, error = %err, "ffprobe inspection failed");
+                    (StatusCode::UNPROCESSABLE_ENTITY, err.to_string())
+                });
+
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            info!(
+                file_name = %file_name,
+                stored_bytes,
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                "temp file cleanup completed"
+            );
+
+            return inspection.map(axum::Json);
+        }
+
+        Err((
+            StatusCode::BAD_REQUEST,
+            "missing multipart field `file`".into(),
+        ))
+    }
+    .instrument(span)
+    .await
+}
+
+#[cfg(feature = "server")]
+async fn inspect_media_path(
+    path: &std::path::Path,
+    file_name: &str,
+) -> anyhow::Result<MediaProbeReport> {
+    use anyhow::{Context, anyhow};
+    use tokio::process::Command;
+    use tracing::{info, instrument};
+
+    #[instrument(skip_all, fields(path = %path.display()))]
+    async fn run_ffprobe(path: &std::path::Path) -> anyhow::Result<std::process::Output> {
+        let output = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-show_format",
+                "-show_streams",
+                "-show_chapters",
+                "-show_programs",
+                "-show_stream_groups",
+            ])
+            .arg(path)
+            .output()
+            .await
+            .context("failed to launch ffprobe")?;
+
+        Ok(output)
+    }
+
+    let output = run_ffprobe(path).await?;
+    info!(
+        stdout_bytes = output.stdout.len(),
+        stderr_bytes = output.stderr.len(),
+        "ffprobe finished"
+    );
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -78,7 +185,29 @@ fn inspect_media_path(path: &std::path::Path, file_name: &str) -> anyhow::Result
     let parsed: FfprobeOutput =
         serde_json::from_value(raw_value).context("failed to deserialize ffprobe json")?;
 
-    Ok(map_ffprobe_report(path, file_name, parsed, raw_json_pretty))
+    let report = map_ffprobe_report(path, file_name, parsed, raw_json_pretty);
+    info!(
+        stream_count = report.stream_count,
+        video_count = report.video_count,
+        audio_count = report.audio_count,
+        subtitle_count = report.subtitle_count,
+        chapter_count = report.chapter_count,
+        "ffprobe report mapped successfully"
+    );
+
+    Ok(report)
+}
+
+#[cfg(feature = "server")]
+fn internal_error(
+    context: &'static str,
+) -> impl Fn(std::io::Error) -> (axum::http::StatusCode, String) + Copy {
+    move |err| {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{context}: {err}"),
+        )
+    }
 }
 
 #[cfg(feature = "server")]
