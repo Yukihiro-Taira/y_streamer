@@ -17,10 +17,10 @@
 
 | Feature | Description |
 |---|---|
-| **Thumbnail generation** | `ffmpeg -ss 5 -vframes 1` → image preview for any video |
+| **Thumbnail generation** ✓ | 3 frames at 10%/50%/90% → base64 in response, shown in UI |
+| **Subtitle extract** ✓ | Extract all streams → SRT, browser download button per track |
 | **Waveform** | Audio file → waveform image (ffmpeg `showwavespic`) |
 | **Scene detection** | Detect cuts / scene changes (ffmpeg `scdet` filter) |
-| **Subtitle extract** | Extract embedded subs → .srt / .vtt |
 
 ---
 
