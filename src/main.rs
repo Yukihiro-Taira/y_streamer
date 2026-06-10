@@ -30,6 +30,7 @@ fn main() {
             media_write_artifact_download_handler, media_write_compress_handler,
             media_write_transcode_handler, media_write_upload_limit_bytes,
         };
+        use crate::domain::observability::client_error_handler::client_error_handler;
 
         dotenv::dotenv().ok();
         let _ = tracing_subscriber::fmt()
@@ -89,6 +90,7 @@ fn main() {
                 "/api/media-write/artifacts/{artifact_id}",
                 get(media_write_artifact_download_handler),
             )
+            .route("/api/errors/client", post(client_error_handler))
             .layer(Extension(pool.clone()))
             .layer(
                 AuthSessionLayer::<User, Uuid, SessionPgPool, PgPool>::new(Some(pool))

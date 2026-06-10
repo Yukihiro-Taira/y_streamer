@@ -2,7 +2,7 @@ pub struct BugReportsDb;
 
 #[cfg(feature = "server")]
 mod db {
-    use sqlx::{PgPool, query_as};
+    use sqlx::{PgPool, query, query_as};
     use time::OffsetDateTime;
     use uuid::Uuid;
 
@@ -42,6 +42,28 @@ mod db {
                     created_at: r.created_at,
                 })
                 .collect())
+        }
+
+        pub async fn insert(
+            pool: &PgPool,
+            bug_type: &str,
+            message: &str,
+            user_login: Option<&str>,
+        ) -> Result<Uuid, sqlx::Error> {
+            let unid = Uuid::new_v4();
+            query!(
+                r#"
+                    INSERT INTO app_schema.bug_reports (unid, bug_type, message, user_login)
+                    VALUES ($1, $2, $3, $4)
+                "#,
+                unid,
+                bug_type,
+                message,
+                user_login,
+            )
+            .execute(pool)
+            .await?;
+            Ok(unid)
         }
     }
 }

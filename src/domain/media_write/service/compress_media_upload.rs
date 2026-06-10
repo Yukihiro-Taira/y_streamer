@@ -11,6 +11,8 @@ use crate::domain::media_write::service::artifact_store::{
 };
 #[cfg(feature = "server")]
 use crate::domain::media_write::service::runtime_config::MediaWriteRuntimeConfig;
+#[cfg(feature = "server")]
+use crate::domain::observability::error_reporter::report_server_error;
 
 #[cfg(feature = "server")]
 #[derive(Clone, Copy, Debug)]
@@ -39,24 +41,26 @@ pub fn media_write_upload_limit_bytes() -> usize {
 
 #[cfg(feature = "server")]
 pub async fn media_write_compress_handler(
+    dioxus::server::axum::Extension(pool): dioxus::server::axum::Extension<sqlx::PgPool>,
     multipart: axum::extract::Multipart,
 ) -> Result<
     axum::Json<MediaWriteResult>,
     (axum::http::StatusCode, axum::Json<MediaWriteErrorResponse>),
 > {
-    run_media_write_job(MediaWriteOperation::Compress, multipart)
+    run_media_write_job(MediaWriteOperation::Compress, pool, multipart)
         .await
         .map(axum::Json)
 }
 
 #[cfg(feature = "server")]
 pub async fn media_write_transcode_handler(
+    dioxus::server::axum::Extension(pool): dioxus::server::axum::Extension<sqlx::PgPool>,
     multipart: axum::extract::Multipart,
 ) -> Result<
     axum::Json<MediaWriteResult>,
     (axum::http::StatusCode, axum::Json<MediaWriteErrorResponse>),
 > {
-    run_media_write_job(MediaWriteOperation::Transcode, multipart)
+    run_media_write_job(MediaWriteOperation::Transcode, pool, multipart)
         .await
         .map(axum::Json)
 }
@@ -95,6 +99,7 @@ pub async fn media_write_artifact_download_handler(
 #[cfg(feature = "server")]
 async fn run_media_write_job(
     operation: MediaWriteOperation,
+    pool: sqlx::PgPool,
     mut multipart: axum::extract::Multipart,
 ) -> Result<MediaWriteResult, (axum::http::StatusCode, axum::Json<MediaWriteErrorResponse>)> {
     use tokio::process::Command;
@@ -168,6 +173,11 @@ async fn run_media_write_job(
             };
             let _ = tokio::fs::remove_file(&output_path).await;
             error!(message = %message, "media_write job failed");
+            report_server_error(
+                pool,
+                format!("media_write.{}_failed", operation_name(operation)),
+                format!("[trace_id={trace_id}]: {message}"),
+            );
             return Err(unprocessable_error(&trace_id, message));
         }
 

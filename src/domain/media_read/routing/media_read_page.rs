@@ -9,6 +9,7 @@ use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
 use crate::domain::media_read::data::media_probe_report::{MediaProbeReport, MediaSubtitle};
+use crate::domain::observability::client_error::report_client_error;
 
 #[component]
 pub fn MediaReadPage() -> Element {
@@ -31,7 +32,10 @@ pub fn MediaReadPage() -> Element {
             async move {
                 match upload_media_file(file).await {
                     Ok(result) => report.set(Some(result)),
-                    Err(err) => error.set(Some(err)),
+                    Err(err) => {
+                        report_client_error("media_read.probe_failed", &err, None);
+                        error.set(Some(err));
+                    }
                 }
                 loading.set(false);
             }

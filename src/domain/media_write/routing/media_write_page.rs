@@ -13,6 +13,7 @@ use crate::domain::media_read::data::media_probe_report::MediaProbeReport;
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_write::data::media_write_job::MediaWriteErrorResponse;
 use crate::domain::media_write::data::media_write_job::MediaWriteResult;
+use crate::domain::observability::client_error::report_client_error;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum MediaWriteOperation {
@@ -42,6 +43,7 @@ pub fn MediaWritePage() -> Element {
     let mut result = use_signal(|| None::<MediaWriteResult>);
     let mut drag_active = use_signal(|| false);
     let mut debug_events = use_signal(Vec::<String>::new);
+    let mut thumbnails: Signal<Vec<String>> = use_signal(Vec::new);
 
     let mut set_file = move |file: dioxus::html::FileData| {
         let file_for_state = file.clone();
@@ -70,6 +72,7 @@ pub fn MediaWritePage() -> Element {
         error.set(None);
         read_report.set(None);
         result.set(None);
+        thumbnails.set(Vec::new());
         read_loading.set(true);
         push_debug_event(&mut debug_events, "ffprobe upload started".to_string());
         spawn({
@@ -83,10 +86,13 @@ pub fn MediaWritePage() -> Element {
                         push_debug_event(
                             &mut debug_events,
                             format!(
-                                "ffprobe response parsed: trace_id={} streams={} upload_bytes={}",
-                                report.trace_id, report.stream_count, report.upload_bytes
+                                "ffprobe response parsed: trace_id={} streams={} upload_bytes={} thumbnails={}",
+                                report.trace_id, report.stream_count, report.upload_bytes, report.thumbnails.len()
                             ),
                         );
+                        if !report.thumbnails.is_empty() {
+                            thumbnails.set(report.thumbnails.clone());
+                        }
                         read_report.set(Some(report));
                         push_debug_event(
                             &mut debug_events,
@@ -95,6 +101,7 @@ pub fn MediaWritePage() -> Element {
                     }
                     Err(err) => {
                         push_debug_event(&mut debug_events, format!("ffprobe failed: {err}"));
+                        report_client_error("media_write.probe_failed", &err, None);
                         error.set(Some(err));
                     }
                 }
@@ -174,6 +181,7 @@ pub fn MediaWritePage() -> Element {
                     }
                     Err(err) => {
                         push_debug_event(&mut debug_events, format!("write job failed: {err}"));
+                        report_client_error("media_write.job_failed", &err, None);
                         error.set(Some(err));
                     }
                 }
@@ -296,6 +304,31 @@ pub fn MediaWritePage() -> Element {
 
             if let Some(job_result) = result() {
                 MediaWriteResultCard { result: job_result }
+            }
+
+            if !thumbnails.read().is_empty() {
+                Card {
+                    CardHeader {
+                        CardTitle { "Thumbnails" }
+                        CardDescription { "Frames at 10%, 50%, 90% of duration" }
+                    }
+                    CardContent {
+                        div { class: "flex flex-wrap gap-3",
+                            for (i, url) in thumbnails.read().iter().enumerate() {
+                                div { class: "relative group rounded-xl overflow-hidden border border-border",
+                                    img {
+                                        src: "{url}",
+                                        class: "h-28 w-auto object-cover rounded-xl",
+                                        alt: "thumbnail {i}",
+                                    }
+                                    div { class: "absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] text-center py-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
+                                        "{[\"10%\", \"50%\", \"90%\"][i]}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if let Some(report) = read_report() {

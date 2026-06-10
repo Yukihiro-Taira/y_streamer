@@ -13,6 +13,8 @@ use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
 use crate::domain::media_read::service::subtitle_extractor::extract_subtitles;
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::thumbnail_generator::generate_thumbnails;
+#[cfg(feature = "server")]
+use crate::domain::observability::error_reporter::report_server_error;
 
 #[cfg(feature = "server")]
 pub fn media_read_upload_limit_bytes() -> usize {
@@ -21,6 +23,7 @@ pub fn media_read_upload_limit_bytes() -> usize {
 
 #[cfg(feature = "server")]
 pub async fn media_read_upload_handler(
+    dioxus::server::axum::Extension(pool): dioxus::server::axum::Extension<sqlx::PgPool>,
     mut multipart: axum::extract::Multipart,
 ) -> Result<
     axum::Json<MediaProbeReport>,
@@ -148,10 +151,14 @@ pub async fn media_read_upload_handler(
                     error = %err,
                     "ffprobe inspection failed"
                 );
+                report_server_error(
+                    pool.clone(),
+                    "media_read.ffprobe_failed",
+                    format!("[trace_id={trace_id}] file={original_file_name}: {err}"),
+                );
                 unprocessable_error(&trace_id, err.to_string())
             });
 
-            // Generate thumbnails if this is a video (temp file still on disk)
             let mut report = match inspection {
                 Ok(r) => r,
                 Err(err) => {
@@ -161,7 +168,12 @@ pub async fn media_read_upload_handler(
             };
 
             if report.video_count > 0 {
-                let duration_secs: f64 = report.duration.parse().unwrap_or(0.0);
+                let duration_secs: f64 = report
+                    .duration
+                    .split_whitespace()
+                    .next()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0.0);
                 report.thumbnails = generate_thumbnails(
                     &config.ffmpeg_bin,
                     &temp_path,
