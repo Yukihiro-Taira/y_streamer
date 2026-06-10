@@ -8,6 +8,7 @@ pub(crate) struct MediaReadRuntimeConfig {
     pub(crate) ffprobe_timeout_secs: u64,
     pub(crate) temp_dir: PathBuf,
     pub(crate) ffprobe_bin: String,
+    pub(crate) ffmpeg_bin: String,
 }
 
 #[cfg(feature = "server")]
@@ -27,6 +28,10 @@ impl MediaReadRuntimeConfig {
                 .ok()
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "ffprobe".into()),
+            ffmpeg_bin: std::env::var("MEDIA_INSPECTOR_FFMPEG_BIN")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "ffmpeg".into()),
         }
     }
 }

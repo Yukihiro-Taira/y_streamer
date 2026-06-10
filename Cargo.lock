@@ -4542,6 +4542,7 @@ dependencies = [
  "axum_session",
  "axum_session_auth",
  "axum_session_sqlx",
+ "base64",
  "dioxus",
  "dioxus-fullstack",
  "dotenv",

@@ -26,6 +26,8 @@ pub struct MediaProbeReport {
     pub streams: Vec<MediaStreamInfo>,
     pub chapters: Vec<MediaChapterInfo>,
     pub raw_json_pretty: String,
+    /// base64 data URLs (data:image/jpeg;base64,...), empty if not a video or generation failed
+    pub thumbnails: Vec<String>,
 }
 
 #[cfg_attr(not(any(feature = "server", target_arch = "wasm32")), allow(dead_code))]

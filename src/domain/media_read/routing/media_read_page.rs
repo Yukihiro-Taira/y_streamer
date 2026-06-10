@@ -173,6 +173,33 @@ fn js_error(err: wasm_bindgen::JsValue) -> String {
 #[component]
 fn MediaReadReport(report: MediaProbeReport) -> Element {
     rsx! {
+        // Thumbnails
+        if !report.thumbnails.is_empty() {
+            Card {
+                CardHeader {
+                    CardTitle { "Thumbnails" }
+                    CardDescription { "Frames at 10%, 50%, 90% of duration" }
+                }
+                CardContent {
+                    div { class: "flex flex-wrap gap-3",
+                        for (i, url) in report.thumbnails.iter().enumerate() {
+                            div { class: "relative group rounded-xl overflow-hidden border border-border",
+                                img {
+                                    src: "{url}",
+                                    class: "h-28 w-auto object-cover rounded-xl",
+                                    alt: "thumbnail {i}",
+                                }
+                                div { class: "absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] text-center py-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
+                                    "{[\"10%\", \"50%\", \"90%\"][i]}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Raw JSON
         Card {
             CardHeader {
                 CardTitle { "Raw ffprobe JSON" }

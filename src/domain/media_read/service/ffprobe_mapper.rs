@@ -78,6 +78,7 @@ pub(crate) fn map_ffprobe_report(
         streams,
         chapters,
         raw_json_pretty,
+        thumbnails: vec![],
     }
 }
 

@@ -9,6 +9,8 @@ use crate::domain::media_read::data::media_probe_report::{
 use crate::domain::media_read::service::ffprobe_runner::inspect_media_path;
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
+#[cfg(feature = "server")]
+use crate::domain::media_read::service::thumbnail_generator::generate_thumbnails;
 
 #[cfg(feature = "server")]
 pub fn media_read_upload_limit_bytes() -> usize {
@@ -147,6 +149,27 @@ pub async fn media_read_upload_handler(
                 unprocessable_error(&trace_id, err.to_string())
             });
 
+            // Generate thumbnails if this is a video (temp file still on disk)
+            let mut report = match inspection {
+                Ok(r) => r,
+                Err(err) => {
+                    let _ = tokio::fs::remove_file(&temp_path).await;
+                    return Err(err);
+                }
+            };
+
+            if report.video_count > 0 {
+                let duration_secs: f64 = report.duration.parse().unwrap_or(0.0);
+                report.thumbnails = generate_thumbnails(
+                    &config.ffmpeg_bin,
+                    &temp_path,
+                    duration_secs,
+                    &trace_id,
+                    &config.temp_dir,
+                )
+                .await;
+            }
+
             if let Err(err) = tokio::fs::remove_file(&temp_path).await {
                 warn!(temp_path = %temp_path.display(), error = %err, "temp file cleanup failed");
             } else {
@@ -158,7 +181,7 @@ pub async fn media_read_upload_handler(
                 );
             }
 
-            return inspection.map(axum::Json);
+            return Ok(axum::Json(report));
         }
 
         Err(bad_request_error(
