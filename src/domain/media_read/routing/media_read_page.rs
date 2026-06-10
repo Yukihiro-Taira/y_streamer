@@ -8,7 +8,7 @@ use wasm_bindgen_futures::JsFuture;
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
-use crate::domain::media_read::data::media_probe_report::MediaProbeReport;
+use crate::domain::media_read::data::media_probe_report::{MediaProbeReport, MediaSubtitle};
 
 #[component]
 pub fn MediaReadPage() -> Element {
@@ -165,6 +165,46 @@ async fn upload_media_file(file: dioxus::html::FileData) -> Result<MediaProbeRep
     }
 }
 
+#[component]
+fn SubtitleDownloadButton(subtitle: MediaSubtitle) -> Element {
+    let label = if subtitle.language.is_empty() {
+        format!("Track {}", subtitle.stream_index)
+    } else {
+        subtitle.language.clone()
+    };
+
+    rsx! {
+        button {
+            class: "inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-medium hover:bg-accent transition-colors",
+            onclick: {
+                let content = subtitle.content.clone();
+                let filename = format!("subtitles-{}.srt", subtitle.language.replace(' ', "_"));
+                move |_| {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        use wasm_bindgen::JsCast;
+                        let win = web_sys::window().unwrap();
+                        let doc = win.document().unwrap();
+                        let blob_parts = js_sys::Array::new();
+                        blob_parts.push(&wasm_bindgen::JsValue::from_str(&content));
+                        let mut opts = web_sys::BlobPropertyBag::new();
+                        opts.type_("text/plain");
+                        let blob = web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &opts).unwrap();
+                        let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                        let anchor: web_sys::HtmlAnchorElement = doc.create_element("a").unwrap().dyn_into().unwrap();
+                        anchor.set_href(&url);
+                        anchor.set_download(&filename);
+                        anchor.click();
+                        web_sys::Url::revoke_object_url(&url).ok();
+                    }
+                }
+            },
+            icons::Download { class: "size-3.5" }
+            "{label} (.srt)"
+        }
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 fn js_error(err: wasm_bindgen::JsValue) -> String {
     err.as_string().unwrap_or_else(|| format!("{err:?}"))
@@ -193,6 +233,23 @@ fn MediaReadReport(report: MediaProbeReport) -> Element {
                                     "{[\"10%\", \"50%\", \"90%\"][i]}"
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Subtitles
+        if !report.subtitles.is_empty() {
+            Card {
+                CardHeader {
+                    CardTitle { "Subtitles" }
+                    CardDescription { "{report.subtitles.len()} track(s) found" }
+                }
+                CardContent {
+                    div { class: "flex flex-wrap gap-2",
+                        for sub in report.subtitles.iter() {
+                            SubtitleDownloadButton { subtitle: sub.clone() }
                         }
                     }
                 }

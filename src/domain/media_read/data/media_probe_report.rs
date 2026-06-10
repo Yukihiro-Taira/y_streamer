@@ -28,6 +28,15 @@ pub struct MediaProbeReport {
     pub raw_json_pretty: String,
     /// base64 data URLs (data:image/jpeg;base64,...), empty if not a video or generation failed
     pub thumbnails: Vec<String>,
+    /// Extracted subtitle streams, empty if none found
+    pub subtitles: Vec<MediaSubtitle>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct MediaSubtitle {
+    pub stream_index: usize,
+    pub language: String,
+    pub content: String,
 }
 
 #[cfg_attr(not(any(feature = "server", target_arch = "wasm32")), allow(dead_code))]

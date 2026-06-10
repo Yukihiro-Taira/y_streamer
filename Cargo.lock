@@ -4547,6 +4547,7 @@ dependencies = [
  "dioxus-fullstack",
  "dotenv",
  "icons",
+ "js-sys",
  "pwhash",
  "serde",
  "serde_json",

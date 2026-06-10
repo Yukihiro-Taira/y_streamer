@@ -10,6 +10,8 @@ use crate::domain::media_read::service::ffprobe_runner::inspect_media_path;
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
 #[cfg(feature = "server")]
+use crate::domain::media_read::service::subtitle_extractor::extract_subtitles;
+#[cfg(feature = "server")]
 use crate::domain::media_read::service::thumbnail_generator::generate_thumbnails;
 
 #[cfg(feature = "server")]
@@ -164,6 +166,17 @@ pub async fn media_read_upload_handler(
                     &config.ffmpeg_bin,
                     &temp_path,
                     duration_secs,
+                    &trace_id,
+                    &config.temp_dir,
+                )
+                .await;
+            }
+
+            if report.subtitle_count > 0 {
+                report.subtitles = extract_subtitles(
+                    &config.ffmpeg_bin,
+                    &temp_path,
+                    &report.streams.clone(),
                     &trace_id,
                     &config.temp_dir,
                 )

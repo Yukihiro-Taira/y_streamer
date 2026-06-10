@@ -38,9 +38,10 @@ tokio = { version = "1", features = ["fs", "io-util", "process", "rt", "time"], 
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "DragEvent", "DataTransfer", "FileList", "File", "Url", "Blob", "Element", "Event", "EventTarget", "HtmlVideoElement", "FormData", "Request", "RequestInit", "Response", "Headers"] }
+web-sys = { version = "0.3", features = ["Window", "DragEvent", "DataTransfer", "FileList", "File", "Url", "Blob", "BlobPropertyBag", "Element", "Event", "EventTarget", "HtmlVideoElement", "HtmlAnchorElement", "Document", "FormData", "Request", "RequestInit", "Response", "Headers"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
 
 [features]
 default = ["web"]
