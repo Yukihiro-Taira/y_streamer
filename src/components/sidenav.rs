@@ -97,6 +97,9 @@ pub fn Sidenav(user: User, open: bool) -> Element {
                     NavItem { to: Route::TestWorkflowsRoute {}, label: "Workflows", open,
                         FlaskConical { class: "size-4 shrink-0" }
                     }
+                    NavItem { to: Route::TestVideoWorkflowRoute {}, label: "Video Workflow", open,
+                        FileVideo { class: "size-4 shrink-0" }
+                    }
                 }
             }
 
