@@ -11,6 +11,7 @@ use crate::domain::auth::routing::users_page::UsersPage;
 use crate::domain::bugreports::routing::bugreports_page::BugReportsPage;
 use crate::domain::media_write::routing::media_write_page::MediaWritePage;
 use crate::domain::test::routing::test_page::TestPage;
+use crate::domain::test::routing::workflows_demo_page::WorkflowsDemoPage;
 
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 
@@ -45,6 +46,9 @@ pub enum Route {
         #[route("/test-media-jobs")]
         TestMediaJobsRoute {},
 
+        #[route("/test-workflows")]
+        TestWorkflowsRoute {},
+
     #[end_layout]
 
     #[route("/:..route")]
@@ -76,6 +80,7 @@ fn DashboardShell() -> Element {
         Route::DashboardAccessDemo {} => "Access Demo",
         Route::TestPageRoute {} => "File Drop Test",
         Route::TestMediaJobsRoute {} => "Media Jobs",
+        Route::TestWorkflowsRoute {} => "Workflows",
         _ => "Dashboard",
     };
 
@@ -155,6 +160,11 @@ fn TestPageRoute() -> Element {
 #[component]
 fn TestMediaJobsRoute() -> Element {
     rsx! { MediaWritePage {} }
+}
+
+#[component]
+fn TestWorkflowsRoute() -> Element {
+    rsx! { WorkflowsDemoPage {} }
 }
 
 #[component]
