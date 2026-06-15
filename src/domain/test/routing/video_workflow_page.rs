@@ -5,7 +5,10 @@ use crate::components::hooks::use_workflow::{WorkflowEdge, WorkflowNode, Workflo
 use crate::components::ui::dropzone::{
     Dropzone, DropzoneArea, DropzoneCtx, DropzoneHint, DropzoneIcon, DropzoneLabel,
 };
-use crate::components::workflow::{WorkflowCanvas, WorkflowControls, WorkflowDefaultNode, WorkflowNodeWrapper};
+use crate::components::workflow::{
+    WfNode, WfNodeContent, WfNodeHeader, WfNodeTitle, WorkflowCanvas, WorkflowControls,
+    WorkflowDefaultNode, WorkflowNodeWrapper,
+};
 
 fn pipeline_nodes() -> Vec<WorkflowNode> {
     vec![
@@ -64,6 +67,44 @@ fn pipeline_edges() -> Vec<WorkflowEdge> {
     ]
 }
 
+/// Custom node for "thumbnails" — shows a video preview from DropzoneCtx
+#[component]
+fn ThumbnailsNode(node: WorkflowNode) -> Element {
+    let ctx = use_context::<DropzoneCtx>();
+    let files = ctx.files.read();
+    let preview = files
+        .first()
+        .and_then(|f| f.preview_url.clone());
+
+    rsx! {
+        WfNode {
+            target: false,
+            source: false,
+            WfNodeHeader {
+                span { class: format!("size-2 rounded-full shrink-0 {}", node.kind.dot_color()) }
+                WfNodeTitle { class: node.kind.text_color(), "{node.label}" }
+                span {
+                    class: "ml-auto text-[10px] text-muted-foreground uppercase tracking-wide shrink-0",
+                    "{node.kind.label()}"
+                }
+            }
+            WfNodeContent {
+                if let Some(url) = preview {
+                    video {
+                        src: "{url}",
+                        class: "w-full rounded object-cover bg-muted",
+                        style: "height: 80px;",
+                        preload: "metadata",
+                        muted: true,
+                    }
+                } else {
+                    p { class: "text-[10px] text-muted-foreground font-mono", "waiting for file…" }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 fn VideoWorkflowCanvas() -> Element {
     let ctx = use_context::<DropzoneCtx>();
@@ -92,7 +133,11 @@ fn VideoWorkflowCanvas() -> Element {
             overlay: rsx! { WorkflowControls { state } },
             for (i, node) in state.nodes.read().iter().cloned().enumerate() {
                 WorkflowNodeWrapper { key: "{node.id}", state, idx: i,
-                    WorkflowDefaultNode { node }
+                    if node.id == "thumbnails" {
+                        ThumbnailsNode { node }
+                    } else {
+                        WorkflowDefaultNode { node }
+                    }
                 }
             }
         }
