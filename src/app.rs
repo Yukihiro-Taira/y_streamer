@@ -39,13 +39,13 @@ pub enum Route {
         #[route("/dashboard/access-demo")]
         DashboardAccessDemo {},
 
+        #[route("/test-page")]
+        TestPageRoute {},
+
+        #[route("/test-media-jobs")]
+        TestMediaJobsRoute {},
+
     #[end_layout]
-
-    #[route("/test-page")]
-    TestPageRoute {},
-
-    #[route("/test-media-jobs")]
-    TestMediaJobsRoute {},
 
     #[route("/:..route")]
     NotFound { route: Vec<String> },
@@ -74,6 +74,8 @@ fn DashboardShell() -> Element {
         Route::DashboardBugReports {} => "Bug Reports",
         Route::DashboardProfile {} => "Profile",
         Route::DashboardAccessDemo {} => "Access Demo",
+        Route::TestPageRoute {} => "File Drop Test",
+        Route::TestMediaJobsRoute {} => "Media Jobs",
         _ => "Dashboard",
     };
 
