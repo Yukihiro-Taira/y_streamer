@@ -1,19 +1,11 @@
-+++
-title = "fullstack auth"
-description = "Exercise for fullstack auth"
-+++
+# Video Platform App
 
-# Fullstack Auth
+## Run the project
 
-Fullstack authentication application with Leptos, Axum, and PostgreSQL.
+```bash
+./reset_db.sh # This will reset the DB and run the migrations
 
-## User Credentials
+pnpm install # If you don't have pnpm, run : npm install -g pnpm
+dx serve
+```
 
-The following test users are available for login:
-
-| Role        | Email               | Password   |
-|-------------|---------------------|------------|
-| Root        | root@example.com    | `password` |
-| Admin       | admin@example.com   | `password` |
-| RegularUser | alice@example.com   | `password` |
-| RegularUser | bob@example.com     | `password` |
