@@ -9,6 +9,7 @@ use crate::domain::auth::routing::login_page::Login;
 use crate::domain::auth::routing::profile_page::ProfilePage;
 use crate::domain::auth::routing::users_page::UsersPage;
 use crate::domain::bugreports::routing::bugreports_page::BugReportsPage;
+use crate::domain::diagnostic::routing::diagnostic_page::DiagnosticPage;
 use crate::domain::media_write::routing::media_write_page::MediaWritePage;
 use crate::domain::test::routing::test_page::TestPage;
 use crate::domain::test::routing::video_workflow_page::VideoWorkflowPage;
@@ -53,6 +54,9 @@ pub enum Route {
         #[route("/test-video-workflow")]
         TestVideoWorkflowRoute {},
 
+        #[route("/diagnostic")]
+        DiagnosticRoute {},
+
     #[end_layout]
 
     #[route("/:..route")]
@@ -86,6 +90,7 @@ fn DashboardShell() -> Element {
         Route::TestMediaJobsRoute {} => "Media Jobs",
         Route::TestWorkflowsRoute {} => "Workflows",
         Route::TestVideoWorkflowRoute {} => "Video Workflow",
+        Route::DiagnosticRoute {} => "Video Diagnostic",
         _ => "Dashboard",
     };
 
@@ -175,6 +180,11 @@ fn TestWorkflowsRoute() -> Element {
 #[component]
 fn TestVideoWorkflowRoute() -> Element {
     rsx! { VideoWorkflowPage {} }
+}
+
+#[component]
+fn DiagnosticRoute() -> Element {
+    rsx! { DiagnosticPage {} }
 }
 
 #[component]
