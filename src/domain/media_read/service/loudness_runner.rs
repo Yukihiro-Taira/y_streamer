@@ -5,11 +5,11 @@ use std::path::Path;
 use crate::domain::media_read::data::media_probe_report::LoudnessReport;
 
 /// Run ffmpeg ebur128 filter to measure R128 loudness.
-/// Returns None if no audio stream or if ffmpeg fails.
+/// Returns Err if no audio stream or if ffmpeg fails.
 #[cfg(feature = "server")]
-pub(crate) async fn run_loudness(ffmpeg_bin: &str, path: &Path) -> Option<LoudnessReport> {
+pub(crate) async fn run_loudness(ffmpeg_bin: &str, path: &Path) -> Result<LoudnessReport, String> {
+    use std::io::ErrorKind;
     use tokio::process::Command;
-    use tracing::warn;
 
     let output = Command::new(ffmpeg_bin)
         .args(["-hide_banner", "-i"])
@@ -17,21 +17,19 @@ pub(crate) async fn run_loudness(ffmpeg_bin: &str, path: &Path) -> Option<Loudne
         .args(["-af", "ebur128=peak=true", "-f", "null", "-"])
         .output()
         .await
-        .ok()?;
+        .map_err(|err| {
+            if err.kind() == ErrorKind::NotFound {
+                format!("ffmpeg not found (bin: {ffmpeg_bin})")
+            } else {
+                format!("failed to launch ffmpeg for loudness: {err}")
+            }
+        })?;
 
     // ebur128 summary goes to stderr regardless of exit code
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    if !output.status.success() && !stderr.contains("Integrated loudness") {
-        warn!(
-            ffmpeg_bin,
-            path = %path.display(),
-            "loudness measurement failed"
-        );
-        return None;
-    }
-
     parse_ebur128_summary(&stderr)
+        .ok_or_else(|| "no R128 summary found — file may have no audio or unsupported format".to_string())
 }
 
 #[cfg(feature = "server")]

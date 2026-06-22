@@ -216,15 +216,21 @@ pub async fn media_read_upload_handler(
                     if has_audio {
                         run_loudness(&config.ffmpeg_bin, &temp_path).await
                     } else {
-                        None
+                        Err("no audio stream".to_string())
                     }
                 },
             );
 
             report.thumbnails = thumbnails;
             report.subtitles = subtitles;
-            report.mediainfo = mediainfo;
-            report.loudness = loudness;
+            match mediainfo {
+                Ok(r) => report.mediainfo = Some(r),
+                Err(e) => report.mediainfo_error = Some(e),
+            }
+            match loudness {
+                Ok(r) => report.loudness = Some(r),
+                Err(e) => report.loudness_error = Some(e),
+            }
 
             if let Err(err) = tokio::fs::remove_file(&temp_path).await {
                 warn!(temp_path = %temp_path.display(), error = %err, "temp file cleanup failed");

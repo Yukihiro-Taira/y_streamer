@@ -81,7 +81,9 @@ pub(crate) fn map_ffprobe_report(
         thumbnails: vec![],
         subtitles: vec![],
         mediainfo: None,
+        mediainfo_error: None,
         loudness: None,
+        loudness_error: None,
     }
 }
 

@@ -30,10 +30,14 @@ pub struct MediaProbeReport {
     pub thumbnails: Vec<String>,
     /// Extracted subtitle streams, empty if none found
     pub subtitles: Vec<MediaSubtitle>,
-    /// mediainfo report, None if mediainfo not installed
+    /// mediainfo report, None if not installed or failed (see mediainfo_error)
     pub mediainfo: Option<MediaInfoReport>,
-    /// R128 loudness analysis, None if no audio or ffmpeg ebur128 failed
+    /// set when mediainfo is None due to an error ("not installed", etc.)
+    pub mediainfo_error: Option<String>,
+    /// R128 loudness analysis, None if no audio or failed (see loudness_error)
     pub loudness: Option<LoudnessReport>,
+    /// set when loudness is None due to an error
+    pub loudness_error: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
