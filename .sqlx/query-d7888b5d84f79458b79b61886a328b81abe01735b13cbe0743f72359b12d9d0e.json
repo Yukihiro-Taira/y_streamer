@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT role as \"role: Role\"\n                    FROM app_schema.roleaccesses\n                    WHERE grantedto_unid = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role: Role",
+        "type_info": {
+          "Custom": {
+            "name": "user_role",
+            "kind": {
+              "Enum": [
+                "Root",
+                "Admin",
+                "RegularUser"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d7888b5d84f79458b79b61886a328b81abe01735b13cbe0743f72359b12d9d0e"
+}

@@ -24,6 +24,7 @@ RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path r
 COPY . .
 
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc
+ENV SQLX_OFFLINE=true
 RUN dx build --release --fullstack
 
 # ------- 4. RUNTIME STAGE ------- #
