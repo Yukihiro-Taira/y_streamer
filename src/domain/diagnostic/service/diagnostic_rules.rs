@@ -28,6 +28,18 @@ pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticRe
         checks.push(check_frame_rate(&vs.frame_rate));
         checks.push(check_vfr(&vs.avg_frame_rate, &vs.r_frame_rate));
         checks.push(check_rotation(&vs.tags));
+        checks.push(check_sample_aspect_ratio(&vs.sample_aspect_ratio));
+        checks.push(check_color_space(
+            &vs.color_primaries,
+            &vs.color_transfer,
+            &vs.color_space,
+            &vs.color_range,
+        ));
+        checks.push(check_b_frames(&vs.has_b_frames));
+        checks.push(check_chroma_location(&vs.chroma_location));
+        if !vs.side_data.is_empty() {
+            checks.extend(check_hdr_side_data(&vs.side_data));
+        }
         if vs.codec_name == "h264" {
             checks.push(check_h264_profile(&vs.profile, profile));
         }
@@ -45,6 +57,7 @@ pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticRe
 
     checks.push(check_subtitles(report.subtitle_count));
     checks.push(check_extension(&report.file_name, &report.format_name));
+    checks.push(check_encoder_tag(&report.format_tags));
 
     if let (Some(vs), Some(a)) = (video.first(), audio.first()) {
         checks.push(check_av_sync(&vs.start_time, &a.start_time));
@@ -394,6 +407,128 @@ fn check_av_duration_mismatch(video_duration: &str, audio_duration: &str) -> Dia
             }
         }
         _ => warn(label, "Cannot compare — duration missing from one or both streams"),
+    }
+}
+
+fn check_sample_aspect_ratio(sar: &str) -> DiagnosticCheck {
+    let label = "Sample aspect ratio";
+    match sar.trim() {
+        "" | "0:1" | "1:1" => pass(label, "Square pixels (1:1)"),
+        r => warn(label, format!("Anamorphic SAR {r} — verify display scaling")),
+    }
+}
+
+fn check_color_space(
+    primaries: &str,
+    transfer: &str,
+    space: &str,
+    range: &str,
+) -> DiagnosticCheck {
+    let label = "Color space";
+    if transfer == "smpte2084" {
+        return warn(label, "PQ / HDR10 — verify player supports HDR");
+    }
+    if transfer == "arib-std-b67" {
+        return warn(label, "HLG HDR — broadcast HDR format");
+    }
+    if primaries == "bt2020" || space == "bt2020nc" || space == "bt2020c" {
+        return warn(label, "BT.2020 wide gamut — HDR content, limited display support");
+    }
+    if range == "pc" {
+        return warn(label, "Full range (pc) — may crush blacks on TV displays");
+    }
+    if primaries.is_empty() && transfer.is_empty() {
+        return warn(label, "Color space untagged — player assumes BT.709");
+    }
+    pass(label, format!("BT.709 — primaries={primaries} transfer={transfer}"))
+}
+
+fn check_b_frames(has_b_frames: &str) -> DiagnosticCheck {
+    let label = "B-frames";
+    match has_b_frames.trim() {
+        "" | "0" => pass(label, "No B-frames — maximum decoder compatibility"),
+        "1" => pass(label, "B-frames: 1 — standard, widely supported"),
+        "2" => warn(label, "B-frames: 2 — verify low-power device support"),
+        n => warn(label, format!("B-frames: {n} — may cause issues on low-power decoders")),
+    }
+}
+
+fn check_chroma_location(chroma_location: &str) -> DiagnosticCheck {
+    let label = "Chroma location";
+    match chroma_location.trim() {
+        "" | "left" => pass(label, "Chroma left — H.264/H.265 standard"),
+        "center" => warn(label, "Chroma center — unusual for H.264, verify encoder settings"),
+        "topleft" => pass(label, "Chroma topleft — interlaced convention, acceptable"),
+        loc => warn(label, format!("{loc} — non-standard chroma location")),
+    }
+}
+
+fn check_hdr_side_data(side_data: &[MediaKeyValue]) -> Vec<DiagnosticCheck> {
+    let mut checks = vec![];
+    for entry in side_data {
+        let check = match entry.key.as_str() {
+            "Mastering display metadata" => {
+                let max_lum = entry
+                    .value
+                    .split(", ")
+                    .find(|p| p.starts_with("max_luminance="))
+                    .and_then(|p| p.strip_prefix("max_luminance="))
+                    .unwrap_or("?");
+                warn(
+                    "HDR mastering display",
+                    format!("HDR10 master display present — max luminance: {max_lum}"),
+                )
+            }
+            "Content light level metadata" => {
+                let max_cll = entry
+                    .value
+                    .split(", ")
+                    .find(|p| p.starts_with("max_content="))
+                    .and_then(|p| p.strip_prefix("max_content="))
+                    .unwrap_or("?");
+                let max_fall = entry
+                    .value
+                    .split(", ")
+                    .find(|p| p.starts_with("max_average="))
+                    .and_then(|p| p.strip_prefix("max_average="))
+                    .unwrap_or("?");
+                warn(
+                    "HDR content light level",
+                    format!("MaxCLL={max_cll}nit MaxFALL={max_fall}nit"),
+                )
+            }
+            "DOVI configuration record" => {
+                let profile = entry
+                    .value
+                    .split(", ")
+                    .find(|p| p.starts_with("dv_profile="))
+                    .and_then(|p| p.strip_prefix("dv_profile="))
+                    .unwrap_or("?");
+                warn(
+                    "Dolby Vision",
+                    format!("Dolby Vision profile {profile} — verify player support"),
+                )
+            }
+            "Spherical Mapping" => warn(
+                "360° video",
+                "Spherical mapping detected — verify 360° player support",
+            ),
+            "Stereo 3D" => warn("Stereo 3D", "3D video detected — verify player support"),
+            _ => continue,
+        };
+        checks.push(check);
+    }
+    checks
+}
+
+fn check_encoder_tag(format_tags: &[MediaKeyValue]) -> DiagnosticCheck {
+    let label = "Encoder";
+    match tag_value(format_tags, "encoder") {
+        Some(enc) if !enc.is_empty() => pass(label, format!("Encoded with: {enc}")),
+        _ => match tag_value(format_tags, "encoding_tool") {
+            Some(tool) if !tool.is_empty() => pass(label, format!("Encoded with: {tool}")),
+            _ => warn(label, "No encoder tag — origin NLE unknown"),
+        },
     }
 }
 

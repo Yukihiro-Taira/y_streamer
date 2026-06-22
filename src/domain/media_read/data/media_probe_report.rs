@@ -87,8 +87,15 @@ pub struct MediaStreamInfo {
     pub has_b_frames: String,
     pub nal_length_size: String,
     pub is_avc: String,
+    pub codec_time_base: String,
+    pub max_bit_rate: String,
+    pub nb_read_frames: String,
+    pub extradata_size: String,
+    pub initial_padding: String,
+    pub closed_captions: String,
     pub disposition: Vec<MediaKeyValue>,
     pub tags: Vec<MediaKeyValue>,
+    pub side_data: Vec<MediaKeyValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]

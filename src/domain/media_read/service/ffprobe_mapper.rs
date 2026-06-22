@@ -153,11 +153,27 @@ fn map_stream_info(stream: FfprobeStream) -> MediaStreamInfo {
             .unwrap_or_default(),
         nal_length_size: stream.nal_length_size.unwrap_or_default(),
         is_avc: stream.is_avc.unwrap_or_default(),
+        codec_time_base: stream.codec_time_base.unwrap_or_default(),
+        max_bit_rate: display_numeric_option(stream.max_bit_rate.as_deref(), "bps"),
+        nb_read_frames: stream.nb_read_frames.unwrap_or_default(),
+        extradata_size: stream
+            .extradata_size
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
+        initial_padding: stream
+            .initial_padding
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
+        closed_captions: stream
+            .closed_captions
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
         disposition: stream
             .disposition
             .map(flatten_object_pairs)
             .unwrap_or_default(),
         tags: flatten_tags(stream.tags),
+        side_data: flatten_side_data(stream.side_data_list),
     }
 }
 
@@ -175,6 +191,32 @@ fn map_chapter_info(chapter: FfprobeChapter) -> MediaChapterInfo {
 #[cfg(feature = "server")]
 fn flatten_tags(value: Option<Value>) -> Vec<MediaKeyValue> {
     value.map(flatten_object_pairs).unwrap_or_default()
+}
+
+#[cfg(feature = "server")]
+fn flatten_side_data(value: Option<Value>) -> Vec<MediaKeyValue> {
+    let arr = match value {
+        Some(Value::Array(arr)) => arr,
+        _ => return vec![],
+    };
+    arr.into_iter()
+        .filter_map(|item| {
+            if let Value::Object(mut map) = item {
+                let key = map
+                    .remove("side_data_type")
+                    .and_then(|v| if let Value::String(s) = v { Some(s) } else { None })
+                    .unwrap_or_else(|| "unknown".into());
+                let value = map
+                    .into_iter()
+                    .map(|(k, v)| format!("{k}={}", json_value_to_string(v)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(MediaKeyValue { key, value })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(feature = "server")]
@@ -321,8 +363,15 @@ struct FfprobeStream {
     has_b_frames: Option<i64>,
     is_avc: Option<String>,
     nal_length_size: Option<String>,
+    codec_time_base: Option<String>,
+    max_bit_rate: Option<String>,
+    nb_read_frames: Option<String>,
+    extradata_size: Option<i64>,
+    initial_padding: Option<i64>,
+    closed_captions: Option<i64>,
     disposition: Option<Value>,
     tags: Option<Value>,
+    side_data_list: Option<Value>,
 }
 
 #[derive(Debug, Deserialize, Default)]
