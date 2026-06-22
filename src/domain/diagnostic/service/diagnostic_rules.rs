@@ -1,11 +1,12 @@
-use crate::domain::diagnostic::data::diagnostic_report::{
-    DiagnosticCheck, DiagnosticReport, DiagnosticStatus,
+use crate::domain::diagnostic::data::{
+    diagnostic_report::{DiagnosticCheck, DiagnosticReport, DiagnosticStatus},
+    platform_profile::PlatformProfile,
 };
 use crate::domain::media_read::data::media_probe_report::{
     MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
 
-pub fn run(report: &MediaProbeReport) -> DiagnosticReport {
+pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticReport {
     let video: Vec<&MediaStreamInfo> = report
         .streams
         .iter()
@@ -17,27 +18,29 @@ pub fn run(report: &MediaProbeReport) -> DiagnosticReport {
         .filter(|s| s.codec_type == "audio")
         .collect();
 
-    let mut checks = vec![check_container(&report.format_name)];
+    let mut checks = vec![check_container(&report.format_name, profile)];
 
     if let Some(vs) = video.first() {
-        checks.push(check_video_codec(&vs.codec_name));
+        checks.push(check_video_codec(&vs.codec_name, profile));
         checks.push(check_pixel_format(&vs.pixel_format));
         checks.push(check_color_depth(&vs.bits_per_raw_sample));
         checks.push(check_field_order(&vs.field_order));
         checks.push(check_frame_rate(&vs.frame_rate));
+        checks.push(check_vfr(&vs.avg_frame_rate, &vs.r_frame_rate));
         checks.push(check_rotation(&vs.tags));
         if vs.codec_name == "h264" {
-            checks.push(check_h264_profile(&vs.profile));
+            checks.push(check_h264_profile(&vs.profile, profile));
         }
     }
 
     checks.push(check_audio_present(report.audio_count));
 
     if let Some(a) = audio.first() {
-        checks.push(check_audio_codec(&a.codec_name));
-        checks.push(check_audio_channels(&a.channel_layout));
-        checks.push(check_sample_rate(&a.sample_rate));
-        checks.push(check_audio_bit_depth(&a.bits_per_sample));
+        checks.push(check_audio_codec(&a.codec_name, profile));
+        checks.push(check_audio_channels(&a.channel_layout, profile));
+        checks.push(check_sample_rate(&a.sample_rate, profile));
+        checks.push(check_audio_bit_depth(&a.bits_per_sample, profile));
+        checks.push(check_default_audio_stream(a));
     }
 
     checks.push(check_subtitles(report.subtitle_count));
@@ -45,6 +48,7 @@ pub fn run(report: &MediaProbeReport) -> DiagnosticReport {
 
     if let (Some(vs), Some(a)) = (video.first(), audio.first()) {
         checks.push(check_av_sync(&vs.start_time, &a.start_time));
+        checks.push(check_av_duration_mismatch(&vs.duration, &a.duration));
     }
 
     DiagnosticReport { checks }
@@ -88,30 +92,64 @@ fn fail(label: &str, detail: impl Into<String>) -> DiagnosticCheck {
     }
 }
 
+fn parse_fps(s: &str) -> Option<f64> {
+    let s = s.trim();
+    // handle "25.000 fps" display format
+    let s = s.trim_end_matches(" fps").trim_end_matches("fps");
+    let parts: Vec<&str> = s.split('/').collect();
+    if parts.len() == 2 {
+        let num: f64 = parts[0].trim().parse().ok()?;
+        let den: f64 = parts[1].trim().parse().ok()?;
+        if den == 0.0 {
+            return None;
+        }
+        Some(num / den)
+    } else {
+        s.trim().parse().ok()
+    }
+}
+
+fn parse_duration_secs(s: &str) -> Option<f64> {
+    // strip suffix like " s"
+    s.trim().trim_end_matches(" s").trim().parse().ok()
+}
+
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
-fn check_container(format_name: &str) -> DiagnosticCheck {
+fn check_container(format_name: &str, profile: &PlatformProfile) -> DiagnosticCheck {
     let label = "Container";
     let first = format_name.split(',').next().unwrap_or(format_name).trim();
-    match first {
-        "mp4" | "mov" => pass(label, format!("{first} — wide compatibility")),
-        "matroska" | "mkv" => warn(label, "MKV — limited browser/mobile support"),
-        "mxf" => pass(label, "MXF — broadcast standard"),
+    match (first, profile) {
+        ("mp4", _) => pass(label, "mp4 — wide compatibility"),
+        ("mov", PlatformProfile::Broadcast) => pass(label, "mov — broadcast standard"),
+        ("mov", _) => pass(label, "mov — good compatibility"),
+        ("mxf", PlatformProfile::Broadcast) => pass(label, "MXF — broadcast standard"),
+        ("mxf", _) => warn(label, "MXF — broadcast only, not web/mobile"),
+        ("matroska" | "mkv", PlatformProfile::Web) => {
+            warn(label, "MKV — limited browser/device support")
+        }
+        ("matroska" | "mkv", _) => warn(label, "MKV — not recommended for delivery"),
         _ => warn(label, format!("{format_name} — check platform support")),
     }
 }
 
-fn check_video_codec(codec_name: &str) -> DiagnosticCheck {
+fn check_video_codec(codec_name: &str, profile: &PlatformProfile) -> DiagnosticCheck {
     let label = "Video codec";
-    match codec_name {
-        "h264" => pass(label, "H.264 — universal compatibility"),
-        "hevc" | "h265" => warn(label, "HEVC — limited on older Android and browsers"),
-        "av1" => warn(label, "AV1 — limited hardware decode support"),
-        "vp9" => warn(label, "VP9 — web-only, limited device support"),
-        "prores" | "dnxhd" | "dnxhr" | "cineform" => {
-            warn(label, format!("{codec_name} — editing codec, not for delivery"))
+    match (codec_name, profile) {
+        ("h264", _) => pass(label, "H.264 — universal compatibility"),
+        ("hevc" | "h265", PlatformProfile::Broadcast) => pass(label, "HEVC — acceptable for broadcast"),
+        ("hevc" | "h265", _) => warn(label, "HEVC — limited on older Android and browsers"),
+        ("av1", PlatformProfile::Web) => warn(label, "AV1 — growing web support, not universal yet"),
+        ("av1", _) => warn(label, "AV1 — limited hardware decode support"),
+        ("vp9", PlatformProfile::Web) => warn(label, "VP9 — web-only"),
+        ("vp9", _) => fail(label, "VP9 — not supported on mobile/broadcast"),
+        ("prores" | "dnxhd" | "dnxhr" | "cineform", PlatformProfile::Broadcast) => {
+            warn(label, format!("{codec_name} — editing codec, acceptable for archival but not delivery"))
         }
-        "" => fail(label, "No video codec detected"),
+        ("prores" | "dnxhd" | "dnxhr" | "cineform", _) => {
+            fail(label, format!("{codec_name} — editing codec, not for delivery"))
+        }
+        ("", _) => fail(label, "No video codec detected"),
         _ => warn(label, format!("{codec_name} — verify platform support")),
     }
 }
@@ -132,7 +170,7 @@ fn check_color_depth(bits_per_raw_sample: &str) -> DiagnosticCheck {
     let label = "Video color depth";
     match bits_per_raw_sample.trim() {
         "8" => pass(label, "8-bit — maximum compatibility"),
-        "0" | "" => pass(label, "8-bit (compressed — normal for H.264/AAC)"),
+        "0" | "" => pass(label, "8-bit (compressed — normal for H.264)"),
         "10" => warn(label, "10-bit HDR — may fail on older web players"),
         "12" => warn(label, "12-bit — cinema/HDR, not web delivery"),
         b => warn(label, format!("{b}-bit — verify platform support")),
@@ -166,17 +204,18 @@ fn check_frame_rate(frame_rate: &str) -> DiagnosticCheck {
     }
 }
 
-fn parse_fps(s: &str) -> Option<f64> {
-    let parts: Vec<&str> = s.split('/').collect();
-    if parts.len() == 2 {
-        let num: f64 = parts[0].trim().parse().ok()?;
-        let den: f64 = parts[1].trim().parse().ok()?;
-        if den == 0.0 {
-            return None;
-        }
-        Some(num / den)
-    } else {
-        s.trim().parse().ok()
+fn check_vfr(avg_frame_rate: &str, r_frame_rate: &str) -> DiagnosticCheck {
+    let label = "Variable frame rate";
+    if avg_frame_rate.is_empty() || r_frame_rate.is_empty() {
+        return warn(label, "Cannot determine — frame rate data missing");
+    }
+    match (parse_fps(avg_frame_rate), parse_fps(r_frame_rate)) {
+        (Some(avg), Some(rfr)) if (avg - rfr).abs() > 0.01 => warn(
+            label,
+            format!("VFR detected — avg {avg:.3} vs container {rfr:.3} fps — may cause sync issues"),
+        ),
+        (Some(avg), Some(_)) => pass(label, format!("CFR — {avg:.3} fps constant")),
+        _ => warn(label, "Cannot determine frame rate consistency"),
     }
 }
 
@@ -189,15 +228,18 @@ fn check_rotation(tags: &[MediaKeyValue]) -> DiagnosticCheck {
     }
 }
 
-fn check_h264_profile(profile: &str) -> DiagnosticCheck {
+fn check_h264_profile(profile: &str, platform: &PlatformProfile) -> DiagnosticCheck {
     let label = "H.264 profile";
-    match profile {
-        "Baseline" | "Constrained Baseline" => {
+    match (profile, platform) {
+        ("Baseline" | "Constrained Baseline", _) => {
             pass(label, "Baseline — maximum mobile compatibility")
         }
-        "Main" => pass(label, "Main — good compatibility"),
-        "High" => warn(label, "High profile — may fail on older mobile/TV"),
-        "" => warn(label, "Profile unknown"),
+        ("Main", _) => pass(label, "Main — good compatibility"),
+        ("High", PlatformProfile::Mobile) => {
+            warn(label, "High profile — may fail on older mobile devices")
+        }
+        ("High", _) => pass(label, "High profile — fine for web/broadcast"),
+        ("", _) => warn(label, "Profile unknown"),
         _ => warn(label, format!("{profile} — verify device support")),
     }
 }
@@ -211,52 +253,84 @@ fn check_audio_present(audio_count: usize) -> DiagnosticCheck {
     }
 }
 
-fn check_audio_codec(codec_name: &str) -> DiagnosticCheck {
+fn check_audio_codec(codec_name: &str, profile: &PlatformProfile) -> DiagnosticCheck {
     let label = "Audio codec";
-    match codec_name {
-        "aac" => pass(label, "AAC — universal support"),
-        "mp3" => pass(label, "MP3 — widely supported"),
-        "pcm_s16le" | "pcm_s24le" | "pcm_s32le" => {
+    match (codec_name, profile) {
+        ("aac", _) => pass(label, "AAC — universal support"),
+        ("mp3", PlatformProfile::Broadcast) => {
+            fail(label, "MP3 — not acceptable for broadcast, use PCM")
+        }
+        ("mp3", _) => pass(label, "MP3 — widely supported"),
+        ("pcm_s16le" | "pcm_s24le" | "pcm_s32le", _) => {
             pass(label, format!("{codec_name} — broadcast PCM"))
         }
-        "opus" => warn(label, "Opus — web-only, limited device support"),
-        "vorbis" => warn(label, "Vorbis — web-only, not for broadcast"),
-        "ac3" | "eac3" => warn(
+        ("opus", PlatformProfile::Web) => pass(label, "Opus — web supported"),
+        ("opus", _) => warn(label, "Opus — web-only, not for mobile/broadcast"),
+        ("vorbis", _) => warn(label, "Vorbis — web-only, not for broadcast"),
+        ("ac3" | "eac3", PlatformProfile::Broadcast) => {
+            pass(label, format!("{codec_name} — broadcast standard"))
+        }
+        ("ac3" | "eac3", _) => warn(
             label,
             format!("{codec_name} — broadcast format, limited browser support"),
         ),
-        "" => warn(label, "Audio codec unknown"),
+        ("", _) => warn(label, "Audio codec unknown"),
         _ => warn(label, format!("{codec_name} — verify platform support")),
     }
 }
 
-fn check_audio_channels(channel_layout: &str) -> DiagnosticCheck {
+fn check_audio_channels(channel_layout: &str, profile: &PlatformProfile) -> DiagnosticCheck {
     let label = "Audio channels";
-    match channel_layout {
-        "mono" => pass(label, "Mono — broadcast standard"),
-        "stereo" => warn(label, "Stereo — use dual mono for broadcast delivery"),
-        "" => warn(label, "Channel layout unknown"),
-        l => warn(label, format!("{l} — verify with delivery spec")),
+    match (channel_layout, profile) {
+        ("mono", _) => pass(label, "Mono — broadcast standard"),
+        ("stereo", PlatformProfile::Broadcast) => {
+            fail(label, "Stereo — broadcast requires dual mono tracks, not stereo")
+        }
+        ("stereo", _) => pass(label, "Stereo — fine for web/mobile"),
+        ("", _) => warn(label, "Channel layout unknown"),
+        (l, PlatformProfile::Broadcast) => {
+            fail(label, format!("{l} — broadcast requires mono tracks"))
+        }
+        (l, _) => warn(label, format!("{l} — verify with delivery spec")),
     }
 }
 
-fn check_sample_rate(sample_rate: &str) -> DiagnosticCheck {
+fn check_sample_rate(sample_rate: &str, profile: &PlatformProfile) -> DiagnosticCheck {
     let label = "Sample rate";
-    match sample_rate.trim() {
-        "48000" => pass(label, "48 kHz — broadcast standard"),
-        "44100" => warn(label, "44.1 kHz — resample to 48 kHz for broadcast"),
-        "" => warn(label, "Sample rate unknown"),
-        r => warn(label, format!("{r} Hz — non-standard, verify with platform")),
+    match (sample_rate.trim(), profile) {
+        ("48000", _) => pass(label, "48 kHz — broadcast standard"),
+        ("44100", PlatformProfile::Broadcast) => {
+            fail(label, "44.1 kHz — broadcast requires 48 kHz")
+        }
+        ("44100", _) => warn(label, "44.1 kHz — resample to 48 kHz for broadcast"),
+        ("", _) => warn(label, "Sample rate unknown"),
+        (r, _) => warn(label, format!("{r} Hz — non-standard")),
     }
 }
 
-fn check_audio_bit_depth(bits_per_sample: &str) -> DiagnosticCheck {
+fn check_audio_bit_depth(bits_per_sample: &str, profile: &PlatformProfile) -> DiagnosticCheck {
     let label = "Audio bit depth";
-    match bits_per_sample.trim() {
-        "16" => pass(label, "16-bit PCM — broadcast standard"),
-        "24" => pass(label, "24-bit PCM — acceptable"),
-        "0" | "" => pass(label, "Compressed audio (AAC/MP3) — bit depth not applicable"),
-        b => warn(label, format!("{b}-bit — verify with delivery spec")),
+    match (bits_per_sample.trim(), profile) {
+        ("16", _) => pass(label, "16-bit PCM — broadcast standard"),
+        ("24", _) => pass(label, "24-bit PCM — acceptable"),
+        ("0" | "", _) => pass(label, "Compressed audio (AAC/MP3) — bit depth not applicable"),
+        (b, PlatformProfile::Broadcast) => {
+            warn(label, format!("{b}-bit — broadcast typically requires 16-bit PCM"))
+        }
+        (b, _) => warn(label, format!("{b}-bit — verify with delivery spec")),
+    }
+}
+
+fn check_default_audio_stream(stream: &MediaStreamInfo) -> DiagnosticCheck {
+    let label = "Default audio stream";
+    let is_default = stream
+        .disposition
+        .iter()
+        .any(|kv| kv.key == "default" && kv.value == "1");
+    if is_default {
+        pass(label, "Default flag set — players will select this track")
+    } else {
+        warn(label, "No default flag — players may not auto-select this track")
     }
 }
 
@@ -291,14 +365,35 @@ fn check_extension(file_name: &str, format_name: &str) -> DiagnosticCheck {
 }
 
 fn check_av_sync(video_start: &str, audio_start: &str) -> DiagnosticCheck {
-    let label = "A/V sync";
-    let v: f64 = video_start.trim().parse().unwrap_or(0.0);
-    let a: f64 = audio_start.trim().parse().unwrap_or(0.0);
+    let label = "A/V start sync";
+    let v: f64 = video_start.trim().trim_end_matches(" s").parse().unwrap_or(0.0);
+    let a: f64 = audio_start.trim().trim_end_matches(" s").parse().unwrap_or(0.0);
     let diff_ms = ((v - a).abs() * 1000.0) as u64;
     if diff_ms < 100 {
         pass(label, format!("Drift {diff_ms} ms — within tolerance"))
     } else {
         warn(label, format!("Drift {diff_ms} ms — may cause sync issues"))
+    }
+}
+
+fn check_av_duration_mismatch(video_duration: &str, audio_duration: &str) -> DiagnosticCheck {
+    let label = "A/V duration";
+    match (
+        parse_duration_secs(video_duration),
+        parse_duration_secs(audio_duration),
+    ) {
+        (Some(v), Some(a)) => {
+            let diff_ms = ((v - a).abs() * 1000.0) as u64;
+            if diff_ms < 500 {
+                pass(label, format!("Match within {diff_ms} ms"))
+            } else {
+                warn(
+                    label,
+                    format!("Mismatch {diff_ms} ms — audio/video length differ"),
+                )
+            }
+        }
+        _ => warn(label, "Cannot compare — duration missing from one or both streams"),
     }
 }
 
@@ -308,7 +403,7 @@ fn check_av_sync(video_start: &str, audio_start: &str) -> DiagnosticCheck {
 mod tests {
     use super::*;
     use crate::domain::media_read::data::media_probe_report::{
-        MediaProbeReport, MediaStreamInfo,
+        MediaKeyValue, MediaProbeReport, MediaStreamInfo,
     };
 
     fn make_report() -> MediaProbeReport {
@@ -325,8 +420,14 @@ mod tests {
                     pixel_format: "yuv420p".into(),
                     bits_per_raw_sample: "8".into(),
                     field_order: "progressive".into(),
-                    frame_rate: "25/1".into(),
+                    frame_rate: "25.000 fps".into(),
+                    avg_frame_rate: "25/1".into(),
+                    r_frame_rate: "25/1".into(),
                     profile: "Main".into(),
+                    disposition: vec![MediaKeyValue {
+                        key: "default".into(),
+                        value: "1".into(),
+                    }],
                     ..Default::default()
                 },
                 MediaStreamInfo {
@@ -335,6 +436,10 @@ mod tests {
                     channel_layout: "stereo".into(),
                     sample_rate: "48000".into(),
                     bits_per_sample: "0".into(),
+                    disposition: vec![MediaKeyValue {
+                        key: "default".into(),
+                        value: "1".into(),
+                    }],
                     ..Default::default()
                 },
             ],
@@ -343,30 +448,53 @@ mod tests {
     }
 
     #[test]
-    fn clean_file_has_no_fails() {
-        let report = make_report();
-        let diag = run(&report);
-        assert_eq!(diag.fail_count(), 0);
+    fn web_stereo_is_pass() {
+        let diag = run(&make_report(), &PlatformProfile::Web);
+        let ch = diag.checks.iter().find(|c| c.label == "Audio channels").unwrap();
+        assert!(matches!(ch.status, DiagnosticStatus::Pass));
     }
 
     #[test]
-    fn no_audio_is_fail() {
+    fn broadcast_stereo_is_fail() {
+        let diag = run(&make_report(), &PlatformProfile::Broadcast);
+        let ch = diag.checks.iter().find(|c| c.label == "Audio channels").unwrap();
+        assert!(matches!(ch.status, DiagnosticStatus::Fail));
+    }
+
+    #[test]
+    fn no_audio_is_fail_all_profiles() {
         let mut report = make_report();
         report.audio_count = 0;
         report.streams.retain(|s| s.codec_type != "audio");
-        let diag = run(&report);
-        assert_eq!(diag.fail_count(), 1);
+        for profile in [PlatformProfile::Web, PlatformProfile::Broadcast, PlatformProfile::Mobile] {
+            let diag = run(&report, &profile);
+            assert_eq!(diag.fail_count(), 1, "expected 1 fail for {}", profile.label());
+        }
     }
 
     #[test]
-    fn stereo_audio_is_warn() {
-        let report = make_report();
-        let diag = run(&report);
-        let audio_ch = diag
-            .checks
-            .iter()
-            .find(|c| c.label == "Audio channels")
-            .unwrap();
-        assert!(matches!(audio_ch.status, DiagnosticStatus::Warn));
+    fn cfr_is_pass() {
+        let diag = run(&make_report(), &PlatformProfile::Web);
+        let vfr = diag.checks.iter().find(|c| c.label == "Variable frame rate").unwrap();
+        assert!(matches!(vfr.status, DiagnosticStatus::Pass));
+    }
+
+    #[test]
+    fn vfr_is_warn() {
+        let mut report = make_report();
+        report.streams[0].avg_frame_rate = "30000/1001".into();
+        report.streams[0].r_frame_rate = "60000/1001".into();
+        let diag = run(&report, &PlatformProfile::Web);
+        let vfr = diag.checks.iter().find(|c| c.label == "Variable frame rate").unwrap();
+        assert!(matches!(vfr.status, DiagnosticStatus::Warn));
+    }
+
+    #[test]
+    fn broadcast_44100_is_fail() {
+        let mut report = make_report();
+        report.streams[1].sample_rate = "44100".into();
+        let diag = run(&report, &PlatformProfile::Broadcast);
+        let sr = diag.checks.iter().find(|c| c.label == "Sample rate").unwrap();
+        assert!(matches!(sr.status, DiagnosticStatus::Fail));
     }
 }

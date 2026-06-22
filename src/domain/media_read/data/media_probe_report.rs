@@ -64,6 +64,8 @@ pub struct MediaStreamInfo {
     pub display_aspect_ratio: String,
     pub sample_aspect_ratio: String,
     pub frame_rate: String,
+    pub avg_frame_rate: String,
+    pub r_frame_rate: String,
     pub pixel_format: String,
     pub sample_format: String,
     pub level: String,
