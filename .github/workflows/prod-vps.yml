@@ -113,12 +113,13 @@ jobs:
           export POSTGRES_DATABASE=${{ secrets.POSTGRES_DATABASE }} && \
           export SESSION_TABLE_NAME=${{ secrets.SESSION_TABLE_NAME }} && \
           docker compose -f docker-compose.shared-server.yml pull && \
+          docker compose -f docker-compose.shared-server.yml down --remove-orphans && \
           docker compose -f docker-compose.shared-server.yml up -d"
 
     - name: Smoke test
       run: |
         sleep 8
-        ${{ env.SSH }} "curl -sf http://localhost:5001/ || (docker compose -f ~/video-platform-app/docker-compose.shared-server.yml logs app --tail=30 && exit 1)"
+        ${{ env.SSH }} "curl -sf http://localhost:5004/ || (docker compose -f ~/video-platform-app/docker-compose.shared-server.yml logs app --tail=30 && exit 1)"
 
     - name: Cleanup old Docker images
       run: |
