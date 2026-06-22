@@ -12,7 +12,9 @@ use crate::domain::diagnostic::data::diagnostic_report::{
 };
 use crate::domain::diagnostic::data::platform_profile::PlatformProfile;
 use crate::domain::diagnostic::service::diagnostic_rules;
-use crate::domain::media_read::data::media_probe_report::MediaProbeReport;
+use crate::domain::media_read::data::media_probe_report::{
+    LoudnessReport, MediaInfoReport, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
+};
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -141,6 +143,19 @@ pub fn DiagnosticPage() -> Element {
             if let (Some(diag), Some(r)) = (diagnostic(), probe_report()) {
                 HeaderCard { report: r.clone(), diag: diag.clone() }
                 DiagnosticResults { report: diag }
+                if let Some(err) = &r.mediainfo_error {
+                    ToolErrorBanner { tool: "mediainfo", message: err.clone() }
+                }
+                if let Some(err) = &r.loudness_error {
+                    ToolErrorBanner { tool: "loudness (ffmpeg)", message: err.clone() }
+                }
+                if let Some(loudness) = &r.loudness {
+                    LoudnessPanel { loudness: loudness.clone() }
+                }
+                if let Some(mi) = &r.mediainfo {
+                    MediaInfoPanel { mi: mi.clone() }
+                }
+                RawStreamDataPanel { report: r.clone() }
             }
         }
     }
@@ -364,4 +379,282 @@ async fn upload_file(file: dioxus::html::FileData) -> Result<MediaProbeReport, S
 #[cfg(target_arch = "wasm32")]
 fn js_err(err: wasm_bindgen::JsValue) -> String {
     err.as_string().unwrap_or_else(|| format!("{err:?}"))
+}
+
+// ── Tool error banner ─────────────────────────────────────────────────────────
+
+#[component]
+fn ToolErrorBanner(tool: &'static str, message: String) -> Element {
+    rsx! {
+        div { class: "rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-700 px-4 py-3 text-sm",
+            span { class: "font-semibold text-yellow-800 dark:text-yellow-400", "{tool}: " }
+            span { class: "text-yellow-700 dark:text-yellow-300 font-mono text-xs", "{message}" }
+        }
+    }
+}
+
+// ── Loudness panel ────────────────────────────────────────────────────────────
+
+#[component]
+fn LoudnessPanel(loudness: LoudnessReport) -> Element {
+    let mut open = use_signal(|| true);
+
+    let integrated: f64 = loudness.integrated_lufs.parse().unwrap_or(f64::NAN);
+    let peak: f64 = loudness.true_peak_dbtp.parse().unwrap_or(f64::NAN);
+
+    let lufs_class = if integrated.is_nan() {
+        "text-muted-foreground"
+    } else if (integrated - -23.0).abs() <= 1.0 {
+        "text-green-600 dark:text-green-400 font-semibold"
+    } else if (integrated - -23.0).abs() <= 3.0 {
+        "text-yellow-600 dark:text-yellow-400 font-semibold"
+    } else {
+        "text-red-600 dark:text-red-400 font-semibold"
+    };
+
+    let peak_class = if peak.is_nan() {
+        "text-muted-foreground"
+    } else if peak <= -1.0 {
+        "text-green-600 dark:text-green-400 font-semibold"
+    } else {
+        "text-red-600 dark:text-red-400 font-semibold"
+    };
+
+    rsx! {
+        div { class: "rounded-xl border border-border overflow-hidden",
+            button {
+                class: "w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 text-sm font-semibold",
+                onclick: move |_| open.toggle(),
+                span { "R128 Loudness (EBU R128 / ATSC A/85)" }
+                span { class: "text-xs text-muted-foreground", if open() { "▲" } else { "▼" } }
+            }
+            if open() {
+                div { class: "px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm",
+                    KvRow { label: "Integrated", value: format!("{} LUFS", loudness.integrated_lufs), value_class: lufs_class }
+                    KvRow { label: "Target (EBU R128)", value: "-23.0 LUFS".to_string(), value_class: "text-muted-foreground" }
+                    KvRow { label: "Threshold", value: format!("{} LUFS", loudness.integrated_threshold), value_class: "text-muted-foreground" }
+                    KvRow { label: "LRA", value: format!("{} LU", loudness.lra_lu), value_class: "text-foreground" }
+                    KvRow { label: "LRA Low", value: format!("{} LUFS", loudness.lra_low), value_class: "text-muted-foreground" }
+                    KvRow { label: "LRA High", value: format!("{} LUFS", loudness.lra_high), value_class: "text-muted-foreground" }
+                    KvRow { label: "True Peak", value: format!("{} dBTP", loudness.true_peak_dbtp), value_class: peak_class }
+                    KvRow { label: "Target (EBU R128)", value: "≤ -1.0 dBTP".to_string(), value_class: "text-muted-foreground" }
+                }
+            }
+        }
+    }
+}
+
+// ── MediaInfo panel ───────────────────────────────────────────────────────────
+
+#[component]
+fn MediaInfoPanel(mi: MediaInfoReport) -> Element {
+    let mut open = use_signal(|| true);
+
+    let rows: Vec<(&'static str, &str)> = vec![
+        ("HDR Format", &mi.hdr_format),
+        ("HDR Compatibility", &mi.hdr_format_compatibility),
+        ("Format Profile", &mi.format_profile),
+        ("Scan Order", &mi.scan_order),
+        ("Standard", &mi.standard),
+        ("Bit Depth", &mi.bit_depth),
+        ("Frame Rate Num", &mi.frame_rate_num),
+        ("Frame Rate Den", &mi.frame_rate_den),
+        ("Audio Delay", &mi.audio_delay_ms),
+        ("Writing Library", &mi.writing_library),
+        ("Encoded Application", &mi.encoded_application),
+    ];
+
+    rsx! {
+        div { class: "rounded-xl border border-border overflow-hidden",
+            button {
+                class: "w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 text-sm font-semibold",
+                onclick: move |_| open.toggle(),
+                span { "MediaInfo" }
+                span { class: "text-xs text-muted-foreground", if open() { "▲" } else { "▼" } }
+            }
+            if open() {
+                div { class: "px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm",
+                    for (key, val) in rows.iter().filter(|(_, v)| !v.is_empty()) {
+                        KvRow { label: *key, value: val.to_string(), value_class: "text-foreground" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Raw stream data panel ─────────────────────────────────────────────────────
+
+#[component]
+fn RawStreamDataPanel(report: MediaProbeReport) -> Element {
+    let mut open = use_signal(|| false);
+
+    rsx! {
+        div { class: "rounded-xl border border-border overflow-hidden",
+            button {
+                class: "w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 text-sm font-semibold",
+                onclick: move |_| open.toggle(),
+                span { "Raw Stream Data" }
+                span { class: "text-xs text-muted-foreground",
+                    "{report.stream_count} streams  "
+                    if open() { "▲" } else { "▼" }
+                }
+            }
+            if open() {
+                div { class: "divide-y divide-border",
+                    // Container / format section
+                    div { class: "px-4 py-3 space-y-2",
+                        p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1", "Container" }
+                        div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
+                            KvRow { label: "Format", value: report.format_name.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Format (long)", value: report.format_long_name.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Duration", value: report.duration.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Size", value: report.size.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Bit rate", value: report.bit_rate.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Start time", value: report.start_time.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Probe score", value: report.probe_score.clone(), value_class: "text-foreground" }
+                            KvRow { label: "Programs", value: report.program_count.to_string(), value_class: "text-foreground" }
+                        }
+                        if !report.format_tags.is_empty() {
+                            p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-2 mb-1", "Container Tags" }
+                            div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
+                                for tag in &report.format_tags {
+                                    KvRow { label: tag.key.clone(), value: tag.value.clone(), value_class: "text-foreground" }
+                                }
+                            }
+                        }
+                    }
+                    // Per-stream sections
+                    for stream in &report.streams {
+                        StreamSection { stream: stream.clone() }
+                    }
+                    // Chapters
+                    if !report.chapters.is_empty() {
+                        div { class: "px-4 py-3",
+                            p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1",
+                                "Chapters ({report.chapter_count})"
+                            }
+                            div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
+                                for ch in &report.chapters {
+                                    KvRow { label: ch.id.to_string(), value: format!("{} → {}", ch.start, ch.end), value_class: "text-foreground" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn StreamSection(stream: MediaStreamInfo) -> Element {
+    let title = format!(
+        "#{} {} — {}",
+        stream.index, stream.codec_type, stream.codec_name
+    );
+
+    let mut rows: Vec<(&'static str, String)> = vec![
+        ("Codec", stream.codec_long_name.clone()),
+        ("Profile", stream.profile.clone()),
+        ("Codec tag", stream.codec_tag.clone()),
+        ("Duration", stream.duration.clone()),
+        ("Bit rate", stream.bit_rate.clone()),
+        ("Max bit rate", stream.max_bit_rate.clone()),
+        ("Frame count", stream.frame_count.clone()),
+        ("Nb read frames", stream.nb_read_frames.clone()),
+    ];
+
+    if stream.codec_type == "video" {
+        rows.extend([
+            ("Size", format!("{}x{} (coded {}x{})", stream.width, stream.height, stream.coded_width, stream.coded_height)),
+            ("DAR", stream.display_aspect_ratio.clone()),
+            ("SAR", stream.sample_aspect_ratio.clone()),
+            ("Frame rate", stream.frame_rate.clone()),
+            ("Avg frame rate", stream.avg_frame_rate.clone()),
+            ("R frame rate", stream.r_frame_rate.clone()),
+            ("Pixel format", stream.pixel_format.clone()),
+            ("Bits/raw sample", stream.bits_per_raw_sample.clone()),
+            ("Level", stream.level.clone()),
+            ("Field order", stream.field_order.clone()),
+            ("Chroma location", stream.chroma_location.clone()),
+            ("Color range", stream.color_range.clone()),
+            ("Color space", stream.color_space.clone()),
+            ("Color transfer", stream.color_transfer.clone()),
+            ("Color primaries", stream.color_primaries.clone()),
+            ("Has B-frames", stream.has_b_frames.clone()),
+            ("Refs", stream.refs.clone()),
+            ("Is AVC", stream.is_avc.clone()),
+            ("NAL length size", stream.nal_length_size.clone()),
+            ("Codec time base", stream.codec_time_base.clone()),
+            ("Extradata size", stream.extradata_size.clone()),
+            ("Closed captions", stream.closed_captions.clone()),
+        ]);
+    } else if stream.codec_type == "audio" {
+        rows.extend([
+            ("Sample rate", stream.sample_rate.clone()),
+            ("Channels", stream.channels.clone()),
+            ("Channel layout", stream.channel_layout.clone()),
+            ("Sample format", stream.sample_format.clone()),
+            ("Bits/sample", stream.bits_per_sample.clone()),
+            ("Bits/raw sample", stream.bits_per_raw_sample.clone()),
+            ("Initial padding", stream.initial_padding.clone()),
+        ]);
+    }
+
+    rows.extend([
+        ("Time base", stream.time_base.clone()),
+        ("Start time", stream.start_time.clone()),
+        ("Stream ID", stream.stream_id.clone()),
+    ]);
+
+    rsx! {
+        div { class: "px-4 py-3 space-y-2",
+            p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1", "{title}" }
+            div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
+                for (key, val) in rows.iter().filter(|(_, v)| !v.is_empty()) {
+                    KvRow { label: *key, value: val.clone(), value_class: "text-foreground" }
+                }
+            }
+            if !stream.disposition.is_empty() {
+                p { class: "text-xs font-medium text-muted-foreground mt-2", "Disposition" }
+                div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
+                    for d in stream.disposition.iter().filter(|kv| kv.value != "0") {
+                        KvRow { label: d.key.clone(), value: d.value.clone(), value_class: "text-foreground" }
+                    }
+                }
+            }
+            if !stream.side_data.is_empty() {
+                p { class: "text-xs font-medium text-muted-foreground mt-2", "Side Data" }
+                div { class: "space-y-1 text-sm",
+                    for sd in &stream.side_data {
+                        div { class: "rounded bg-muted/50 px-3 py-1.5",
+                            p { class: "text-xs font-semibold text-primary", "{sd.key}" }
+                            p { class: "text-xs text-muted-foreground font-mono break-all", "{sd.value}" }
+                        }
+                    }
+                }
+            }
+            if !stream.tags.is_empty() {
+                p { class: "text-xs font-medium text-muted-foreground mt-2", "Tags" }
+                div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
+                    for tag in &stream.tags {
+                        KvRow { label: tag.key.clone(), value: tag.value.clone(), value_class: "text-foreground" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Shared ────────────────────────────────────────────────────────────────────
+
+#[component]
+fn KvRow(label: String, value: String, value_class: &'static str) -> Element {
+    rsx! {
+        div { class: "contents",
+            span { class: "text-muted-foreground truncate", "{label}" }
+            span { class: "font-mono text-xs break-all {value_class}", "{value}" }
+        }
+    }
 }
