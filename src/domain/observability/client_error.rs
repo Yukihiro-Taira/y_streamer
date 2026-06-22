@@ -1,6 +1,10 @@
 /// Fire-and-forget: POST error to /api/errors/client. Never blocks the caller.
 #[cfg(target_arch = "wasm32")]
-pub fn report_client_error(bug_type: impl Into<String>, message: impl Into<String>, trace_id: Option<String>) {
+pub fn report_client_error(
+    bug_type: impl Into<String>,
+    message: impl Into<String>,
+    trace_id: Option<String>,
+) {
     use wasm_bindgen::JsValue;
     use wasm_bindgen_futures::spawn_local;
 

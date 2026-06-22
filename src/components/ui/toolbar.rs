@@ -39,7 +39,10 @@ pub fn Toolbar(
 
 #[component]
 pub fn ToolbarList(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
-    let merged = tw_merge!("flex items-center gap-1 list-none m-0 p-0", class.as_deref().unwrap_or(""));
+    let merged = tw_merge!(
+        "flex items-center gap-1 list-none m-0 p-0",
+        class.as_deref().unwrap_or("")
+    );
 
     rsx! {
         ul { "data-name": "ToolbarList", class: "{merged}", {children} }
@@ -68,8 +71,12 @@ pub enum ToolbarButtonVariant {
 impl ToolbarButtonVariant {
     fn as_str(&self) -> &'static str {
         match self {
-            ToolbarButtonVariant::Default => "bg-transparent hover:bg-accent hover:text-accent-foreground",
-            ToolbarButtonVariant::Ghost => "bg-transparent hover:bg-muted hover:text-muted-foreground",
+            ToolbarButtonVariant::Default => {
+                "bg-transparent hover:bg-accent hover:text-accent-foreground"
+            }
+            ToolbarButtonVariant::Ghost => {
+                "bg-transparent hover:bg-muted hover:text-muted-foreground"
+            }
             ToolbarButtonVariant::Outline => {
                 "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground"
             }

@@ -5,13 +5,13 @@ use wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 
-#[cfg(target_arch = "wasm32")]
-use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
 use crate::domain::diagnostic::data::diagnostic_report::{
     DiagnosticCheck, DiagnosticReport, DiagnosticStatus,
 };
 use crate::domain::diagnostic::data::platform_profile::PlatformProfile;
 use crate::domain::diagnostic::service::diagnostic_rules;
+#[cfg(target_arch = "wasm32")]
+use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
 use crate::domain::media_read::data::media_probe_report::{
     LoudnessReport, MediaInfoReport, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
@@ -332,9 +332,8 @@ async fn upload_file(file: dioxus::html::FileData) -> Result<MediaProbeReport, S
         options.set_method("POST");
         options.set_body(&form_data);
 
-        let request =
-            web_sys::Request::new_with_str_and_init("/api/media-read/upload", &options)
-                .map_err(js_err)?;
+        let request = web_sys::Request::new_with_str_and_init("/api/media-read/upload", &options)
+            .map_err(js_err)?;
         request
             .headers()
             .set("Accept", "application/json")
@@ -567,7 +566,13 @@ fn StreamSection(stream: MediaStreamInfo) -> Element {
 
     if stream.codec_type == "video" {
         rows.extend([
-            ("Size", format!("{}x{} (coded {}x{})", stream.width, stream.height, stream.coded_width, stream.coded_height)),
+            (
+                "Size",
+                format!(
+                    "{}x{} (coded {}x{})",
+                    stream.width, stream.height, stream.coded_width, stream.coded_height
+                ),
+            ),
             ("DAR", stream.display_aspect_ratio.clone()),
             ("SAR", stream.sample_aspect_ratio.clone()),
             ("Frame rate", stream.frame_rate.clone()),

@@ -9,6 +9,7 @@ use crate::domain::media_read::data::media_probe_report::LoudnessReport;
 #[cfg(feature = "server")]
 pub(crate) async fn run_loudness(ffmpeg_bin: &str, path: &Path) -> Result<LoudnessReport, String> {
     use std::io::ErrorKind;
+
     use tokio::process::Command;
 
     let output = Command::new(ffmpeg_bin)
@@ -28,8 +29,9 @@ pub(crate) async fn run_loudness(ffmpeg_bin: &str, path: &Path) -> Result<Loudne
     // ebur128 summary goes to stderr regardless of exit code
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    parse_ebur128_summary(&stderr)
-        .ok_or_else(|| "no R128 summary found — file may have no audio or unsupported format".to_string())
+    parse_ebur128_summary(&stderr).ok_or_else(|| {
+        "no R128 summary found — file may have no audio or unsupported format".to_string()
+    })
 }
 
 #[cfg(feature = "server")]

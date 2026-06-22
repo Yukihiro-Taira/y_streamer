@@ -1,7 +1,7 @@
-use crate::domain::diagnostic::data::{
-    diagnostic_report::{DiagnosticCheck, DiagnosticReport, DiagnosticStatus},
-    platform_profile::PlatformProfile,
+use crate::domain::diagnostic::data::diagnostic_report::{
+    DiagnosticCheck, DiagnosticReport, DiagnosticStatus,
 };
+use crate::domain::diagnostic::data::platform_profile::PlatformProfile;
 use crate::domain::media_read::data::media_probe_report::{
     MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
@@ -150,18 +150,24 @@ fn check_video_codec(codec_name: &str, profile: &PlatformProfile) -> DiagnosticC
     let label = "Video codec";
     match (codec_name, profile) {
         ("h264", _) => pass(label, "H.264 — universal compatibility"),
-        ("hevc" | "h265", PlatformProfile::Broadcast) => pass(label, "HEVC — acceptable for broadcast"),
+        ("hevc" | "h265", PlatformProfile::Broadcast) => {
+            pass(label, "HEVC — acceptable for broadcast")
+        }
         ("hevc" | "h265", _) => warn(label, "HEVC — limited on older Android and browsers"),
-        ("av1", PlatformProfile::Web) => warn(label, "AV1 — growing web support, not universal yet"),
+        ("av1", PlatformProfile::Web) => {
+            warn(label, "AV1 — growing web support, not universal yet")
+        }
         ("av1", _) => warn(label, "AV1 — limited hardware decode support"),
         ("vp9", PlatformProfile::Web) => warn(label, "VP9 — web-only"),
         ("vp9", _) => fail(label, "VP9 — not supported on mobile/broadcast"),
-        ("prores" | "dnxhd" | "dnxhr" | "cineform", PlatformProfile::Broadcast) => {
-            warn(label, format!("{codec_name} — editing codec, acceptable for archival but not delivery"))
-        }
-        ("prores" | "dnxhd" | "dnxhr" | "cineform", _) => {
-            fail(label, format!("{codec_name} — editing codec, not for delivery"))
-        }
+        ("prores" | "dnxhd" | "dnxhr" | "cineform", PlatformProfile::Broadcast) => warn(
+            label,
+            format!("{codec_name} — editing codec, acceptable for archival but not delivery"),
+        ),
+        ("prores" | "dnxhd" | "dnxhr" | "cineform", _) => fail(
+            label,
+            format!("{codec_name} — editing codec, not for delivery"),
+        ),
         ("", _) => fail(label, "No video codec detected"),
         _ => warn(label, format!("{codec_name} — verify platform support")),
     }
@@ -213,7 +219,10 @@ fn check_frame_rate(frame_rate: &str) -> DiagnosticCheck {
     } else if (fps - 24.0).abs() < 0.1 || (fps - 23.976).abs() < 0.01 {
         pass(label, format!("{fps:.3} fps — cinema standard"))
     } else {
-        warn(label, format!("{fps:.3} fps — non-standard, verify with platform"))
+        warn(
+            label,
+            format!("{fps:.3} fps — non-standard, verify with platform"),
+        )
     }
 }
 
@@ -225,7 +234,9 @@ fn check_vfr(avg_frame_rate: &str, r_frame_rate: &str) -> DiagnosticCheck {
     match (parse_fps(avg_frame_rate), parse_fps(r_frame_rate)) {
         (Some(avg), Some(rfr)) if (avg - rfr).abs() > 0.01 => warn(
             label,
-            format!("VFR detected — avg {avg:.3} vs container {rfr:.3} fps — may cause sync issues"),
+            format!(
+                "VFR detected — avg {avg:.3} vs container {rfr:.3} fps — may cause sync issues"
+            ),
         ),
         (Some(avg), Some(_)) => pass(label, format!("CFR — {avg:.3} fps constant")),
         _ => warn(label, "Cannot determine frame rate consistency"),
@@ -296,9 +307,10 @@ fn check_audio_channels(channel_layout: &str, profile: &PlatformProfile) -> Diag
     let label = "Audio channels";
     match (channel_layout, profile) {
         ("mono", _) => pass(label, "Mono — broadcast standard"),
-        ("stereo", PlatformProfile::Broadcast) => {
-            fail(label, "Stereo — broadcast requires dual mono tracks, not stereo")
-        }
+        ("stereo", PlatformProfile::Broadcast) => fail(
+            label,
+            "Stereo — broadcast requires dual mono tracks, not stereo",
+        ),
         ("stereo", _) => pass(label, "Stereo — fine for web/mobile"),
         ("", _) => warn(label, "Channel layout unknown"),
         (l, PlatformProfile::Broadcast) => {
@@ -326,10 +338,14 @@ fn check_audio_bit_depth(bits_per_sample: &str, profile: &PlatformProfile) -> Di
     match (bits_per_sample.trim(), profile) {
         ("16", _) => pass(label, "16-bit PCM — broadcast standard"),
         ("24", _) => pass(label, "24-bit PCM — acceptable"),
-        ("0" | "", _) => pass(label, "Compressed audio (AAC/MP3) — bit depth not applicable"),
-        (b, PlatformProfile::Broadcast) => {
-            warn(label, format!("{b}-bit — broadcast typically requires 16-bit PCM"))
-        }
+        ("0" | "", _) => pass(
+            label,
+            "Compressed audio (AAC/MP3) — bit depth not applicable",
+        ),
+        (b, PlatformProfile::Broadcast) => warn(
+            label,
+            format!("{b}-bit — broadcast typically requires 16-bit PCM"),
+        ),
         (b, _) => warn(label, format!("{b}-bit — verify with delivery spec")),
     }
 }
@@ -343,7 +359,10 @@ fn check_default_audio_stream(stream: &MediaStreamInfo) -> DiagnosticCheck {
     if is_default {
         pass(label, "Default flag set — players will select this track")
     } else {
-        warn(label, "No default flag — players may not auto-select this track")
+        warn(
+            label,
+            "No default flag — players may not auto-select this track",
+        )
     }
 }
 
@@ -352,7 +371,10 @@ fn check_subtitles(subtitle_count: usize) -> DiagnosticCheck {
     if subtitle_count > 0 {
         pass(label, format!("{subtitle_count} stream(s) embedded"))
     } else {
-        warn(label, "No embedded subtitles — check if sidecar .srt needed")
+        warn(
+            label,
+            "No embedded subtitles — check if sidecar .srt needed",
+        )
     }
 }
 
@@ -379,8 +401,16 @@ fn check_extension(file_name: &str, format_name: &str) -> DiagnosticCheck {
 
 fn check_av_sync(video_start: &str, audio_start: &str) -> DiagnosticCheck {
     let label = "A/V start sync";
-    let v: f64 = video_start.trim().trim_end_matches(" s").parse().unwrap_or(0.0);
-    let a: f64 = audio_start.trim().trim_end_matches(" s").parse().unwrap_or(0.0);
+    let v: f64 = video_start
+        .trim()
+        .trim_end_matches(" s")
+        .parse()
+        .unwrap_or(0.0);
+    let a: f64 = audio_start
+        .trim()
+        .trim_end_matches(" s")
+        .parse()
+        .unwrap_or(0.0);
     let diff_ms = ((v - a).abs() * 1000.0) as u64;
     if diff_ms < 100 {
         pass(label, format!("Drift {diff_ms} ms — within tolerance"))
@@ -406,7 +436,10 @@ fn check_av_duration_mismatch(video_duration: &str, audio_duration: &str) -> Dia
                 )
             }
         }
-        _ => warn(label, "Cannot compare — duration missing from one or both streams"),
+        _ => warn(
+            label,
+            "Cannot compare — duration missing from one or both streams",
+        ),
     }
 }
 
@@ -414,16 +447,14 @@ fn check_sample_aspect_ratio(sar: &str) -> DiagnosticCheck {
     let label = "Sample aspect ratio";
     match sar.trim() {
         "" | "0:1" | "1:1" => pass(label, "Square pixels (1:1)"),
-        r => warn(label, format!("Anamorphic SAR {r} — verify display scaling")),
+        r => warn(
+            label,
+            format!("Anamorphic SAR {r} — verify display scaling"),
+        ),
     }
 }
 
-fn check_color_space(
-    primaries: &str,
-    transfer: &str,
-    space: &str,
-    range: &str,
-) -> DiagnosticCheck {
+fn check_color_space(primaries: &str, transfer: &str, space: &str, range: &str) -> DiagnosticCheck {
     let label = "Color space";
     if transfer == "smpte2084" {
         return warn(label, "PQ / HDR10 — verify player supports HDR");
@@ -432,7 +463,10 @@ fn check_color_space(
         return warn(label, "HLG HDR — broadcast HDR format");
     }
     if primaries == "bt2020" || space == "bt2020nc" || space == "bt2020c" {
-        return warn(label, "BT.2020 wide gamut — HDR content, limited display support");
+        return warn(
+            label,
+            "BT.2020 wide gamut — HDR content, limited display support",
+        );
     }
     if range == "pc" {
         return warn(label, "Full range (pc) — may crush blacks on TV displays");
@@ -440,7 +474,10 @@ fn check_color_space(
     if primaries.is_empty() && transfer.is_empty() {
         return warn(label, "Color space untagged — player assumes BT.709");
     }
-    pass(label, format!("BT.709 — primaries={primaries} transfer={transfer}"))
+    pass(
+        label,
+        format!("BT.709 — primaries={primaries} transfer={transfer}"),
+    )
 }
 
 fn check_b_frames(has_b_frames: &str) -> DiagnosticCheck {
@@ -449,7 +486,10 @@ fn check_b_frames(has_b_frames: &str) -> DiagnosticCheck {
         "" | "0" => pass(label, "No B-frames — maximum decoder compatibility"),
         "1" => pass(label, "B-frames: 1 — standard, widely supported"),
         "2" => warn(label, "B-frames: 2 — verify low-power device support"),
-        n => warn(label, format!("B-frames: {n} — may cause issues on low-power decoders")),
+        n => warn(
+            label,
+            format!("B-frames: {n} — may cause issues on low-power decoders"),
+        ),
     }
 }
 
@@ -457,7 +497,10 @@ fn check_chroma_location(chroma_location: &str) -> DiagnosticCheck {
     let label = "Chroma location";
     match chroma_location.trim() {
         "" | "left" => pass(label, "Chroma left — H.264/H.265 standard"),
-        "center" => warn(label, "Chroma center — unusual for H.264, verify encoder settings"),
+        "center" => warn(
+            label,
+            "Chroma center — unusual for H.264, verify encoder settings",
+        ),
         "topleft" => pass(label, "Chroma topleft — interlaced convention, acceptable"),
         loc => warn(label, format!("{loc} — non-standard chroma location")),
     }
@@ -585,14 +628,22 @@ mod tests {
     #[test]
     fn web_stereo_is_pass() {
         let diag = run(&make_report(), &PlatformProfile::Web);
-        let ch = diag.checks.iter().find(|c| c.label == "Audio channels").unwrap();
+        let ch = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Audio channels")
+            .unwrap();
         assert!(matches!(ch.status, DiagnosticStatus::Pass));
     }
 
     #[test]
     fn broadcast_stereo_is_fail() {
         let diag = run(&make_report(), &PlatformProfile::Broadcast);
-        let ch = diag.checks.iter().find(|c| c.label == "Audio channels").unwrap();
+        let ch = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Audio channels")
+            .unwrap();
         assert!(matches!(ch.status, DiagnosticStatus::Fail));
     }
 
@@ -601,16 +652,29 @@ mod tests {
         let mut report = make_report();
         report.audio_count = 0;
         report.streams.retain(|s| s.codec_type != "audio");
-        for profile in [PlatformProfile::Web, PlatformProfile::Broadcast, PlatformProfile::Mobile] {
+        for profile in [
+            PlatformProfile::Web,
+            PlatformProfile::Broadcast,
+            PlatformProfile::Mobile,
+        ] {
             let diag = run(&report, &profile);
-            assert_eq!(diag.fail_count(), 1, "expected 1 fail for {}", profile.label());
+            assert_eq!(
+                diag.fail_count(),
+                1,
+                "expected 1 fail for {}",
+                profile.label()
+            );
         }
     }
 
     #[test]
     fn cfr_is_pass() {
         let diag = run(&make_report(), &PlatformProfile::Web);
-        let vfr = diag.checks.iter().find(|c| c.label == "Variable frame rate").unwrap();
+        let vfr = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Variable frame rate")
+            .unwrap();
         assert!(matches!(vfr.status, DiagnosticStatus::Pass));
     }
 
@@ -620,7 +684,11 @@ mod tests {
         report.streams[0].avg_frame_rate = "30000/1001".into();
         report.streams[0].r_frame_rate = "60000/1001".into();
         let diag = run(&report, &PlatformProfile::Web);
-        let vfr = diag.checks.iter().find(|c| c.label == "Variable frame rate").unwrap();
+        let vfr = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Variable frame rate")
+            .unwrap();
         assert!(matches!(vfr.status, DiagnosticStatus::Warn));
     }
 
@@ -629,7 +697,11 @@ mod tests {
         let mut report = make_report();
         report.streams[1].sample_rate = "44100".into();
         let diag = run(&report, &PlatformProfile::Broadcast);
-        let sr = diag.checks.iter().find(|c| c.label == "Sample rate").unwrap();
+        let sr = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Sample rate")
+            .unwrap();
         assert!(matches!(sr.status, DiagnosticStatus::Fail));
     }
 }

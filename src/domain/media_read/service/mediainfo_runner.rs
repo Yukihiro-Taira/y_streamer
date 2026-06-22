@@ -7,6 +7,7 @@ use crate::domain::media_read::data::media_probe_report::MediaInfoReport;
 #[cfg(feature = "server")]
 pub(crate) async fn run_mediainfo(bin: &str, path: &Path) -> Result<MediaInfoReport, String> {
     use std::io::ErrorKind;
+
     use serde_json::Value;
     use tokio::process::Command;
 

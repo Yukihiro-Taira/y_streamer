@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
 use icons::Upload;
 
-use crate::components::hooks::use_workflow::{WorkflowEdge, WorkflowNode, WorkflowNodeKind, use_workflow};
+use crate::components::hooks::use_workflow::{
+    WorkflowEdge, WorkflowNode, WorkflowNodeKind, use_workflow,
+};
 use crate::components::ui::dropzone::{
     Dropzone, DropzoneArea, DropzoneCtx, DropzoneHint, DropzoneIcon, DropzoneLabel,
 };
@@ -61,9 +63,21 @@ fn pipeline_nodes() -> Vec<WorkflowNode> {
 
 fn pipeline_edges() -> Vec<WorkflowEdge> {
     vec![
-        WorkflowEdge { from: "input".to_string(), to: "ffmpeg".to_string(), ..Default::default() },
-        WorkflowEdge { from: "ffmpeg".to_string(), to: "thumbnails".to_string(), ..Default::default() },
-        WorkflowEdge { from: "ffmpeg".to_string(), to: "subtitles".to_string(), ..Default::default() },
+        WorkflowEdge {
+            from: "input".to_string(),
+            to: "ffmpeg".to_string(),
+            ..Default::default()
+        },
+        WorkflowEdge {
+            from: "ffmpeg".to_string(),
+            to: "thumbnails".to_string(),
+            ..Default::default()
+        },
+        WorkflowEdge {
+            from: "ffmpeg".to_string(),
+            to: "subtitles".to_string(),
+            ..Default::default()
+        },
     ]
 }
 
@@ -72,9 +86,7 @@ fn pipeline_edges() -> Vec<WorkflowEdge> {
 fn ThumbnailsNode(node: WorkflowNode) -> Element {
     let ctx = use_context::<DropzoneCtx>();
     let files = ctx.files.read();
-    let preview = files
-        .first()
-        .and_then(|f| f.preview_url.clone());
+    let preview = files.first().and_then(|f| f.preview_url.clone());
 
     rsx! {
         WfNode {

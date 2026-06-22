@@ -87,7 +87,10 @@ pub fn MediaWritePage() -> Element {
                             &mut debug_events,
                             format!(
                                 "ffprobe response parsed: trace_id={} streams={} upload_bytes={} thumbnails={}",
-                                report.trace_id, report.stream_count, report.upload_bytes, report.thumbnails.len()
+                                report.trace_id,
+                                report.stream_count,
+                                report.upload_bytes,
+                                report.thumbnails.len()
                             ),
                         );
                         if !report.thumbnails.is_empty() {

@@ -2,7 +2,7 @@
 use std::path::Path;
 
 #[cfg(feature = "server")]
-use crate::domain::media_read::data::media_probe_report::{MediaSubtitle, MediaStreamInfo};
+use crate::domain::media_read::data::media_probe_report::{MediaStreamInfo, MediaSubtitle};
 
 /// Extract all subtitle streams from a media file to SRT text.
 #[cfg(feature = "server")]
@@ -69,7 +69,9 @@ pub async fn extract_subtitles(
                 }
                 let _ = tokio::fs::remove_file(&out_path).await;
             }
-            Ok(s) => warn!(trace_id, stream_order, code = ?s.code(), "ffmpeg subtitle exit non-zero"),
+            Ok(s) => {
+                warn!(trace_id, stream_order, code = ?s.code(), "ffmpeg subtitle exit non-zero")
+            }
             Err(err) => warn!(trace_id, stream_order, %err, "ffmpeg subtitle spawn failed"),
         }
     }

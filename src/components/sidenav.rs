@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use icons::{
-    Bug, ChevronsUpDown, FileVideo, FlaskConical, LayoutDashboard, LogOut, ShieldCheck,
-    UserRound, Users,
+    Bug, ChevronsUpDown, FileVideo, FlaskConical, LayoutDashboard, LogOut, ShieldCheck, UserRound,
+    Users,
 };
 
 use crate::app::Route;

@@ -38,8 +38,7 @@ pub async fn client_error_handler(
         "client error reported"
     );
 
-    if let Err(db_err) = BugReportsDb::insert(&pool, &payload.bug_type, &full_message, None).await
-    {
+    if let Err(db_err) = BugReportsDb::insert(&pool, &payload.bug_type, &full_message, None).await {
         report_server_error(pool, "db_insert_failed", db_err.to_string());
     }
 

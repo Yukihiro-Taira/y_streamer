@@ -273,7 +273,13 @@ impl WorkflowState {
     }
 
     pub fn start_connect(&mut self, from_node_id: String, from_x: f64, from_y: f64) {
-        self.connecting.set(Some(ConnectingState { from_node_id, from_x, from_y, mouse_x: from_x, mouse_y: from_y }));
+        self.connecting.set(Some(ConnectingState {
+            from_node_id,
+            from_x,
+            from_y,
+            mouse_x: from_x,
+            mouse_y: from_y,
+        }));
     }
 
     pub fn update_connect_mouse(&mut self, ex: f64, ey: f64) {
@@ -297,9 +303,17 @@ impl WorkflowState {
         if cs.from_node_id == to_node_id {
             return;
         }
-        let already = self.edges.read().iter().any(|e| e.from == cs.from_node_id && e.to == to_node_id);
+        let already = self
+            .edges
+            .read()
+            .iter()
+            .any(|e| e.from == cs.from_node_id && e.to == to_node_id);
         if !already {
-            self.edges.write().push(WorkflowEdge { from: cs.from_node_id, to: to_node_id, ..Default::default() });
+            self.edges.write().push(WorkflowEdge {
+                from: cs.from_node_id,
+                to: to_node_id,
+                ..Default::default()
+            });
             self.push_history();
         }
     }
@@ -320,7 +334,9 @@ impl WorkflowState {
     }
 
     pub fn delete_selected_edge(&mut self) {
-        let Some(idx) = *self.selected_edge.read() else { return };
+        let Some(idx) = *self.selected_edge.read() else {
+            return;
+        };
         if idx < self.edges.read().len() {
             self.edges.write().remove(idx);
         }
@@ -345,7 +361,9 @@ impl WorkflowState {
     }
 
     pub fn finish_edit(&mut self) {
-        let Some(idx) = *self.editing_node.read() else { return };
+        let Some(idx) = *self.editing_node.read() else {
+            return;
+        };
         let val = self.edit_buffer.read().clone();
         if let Some(node) = self.nodes.write().get_mut(idx) {
             node.label = val;
@@ -364,17 +382,28 @@ impl WorkflowState {
     }
 
     pub fn start_edit_edge(&mut self, idx: usize) {
-        let label = self.edges.read().get(idx).and_then(|e| e.label.clone()).unwrap_or_default();
+        let label = self
+            .edges
+            .read()
+            .get(idx)
+            .and_then(|e| e.label.clone())
+            .unwrap_or_default();
         self.edit_buffer.set(label);
         self.editing_node.set(None);
         self.editing_edge.set(Some(idx));
     }
 
     pub fn commit_edit_edge(&mut self) {
-        let Some(idx) = *self.editing_edge.read() else { return };
+        let Some(idx) = *self.editing_edge.read() else {
+            return;
+        };
         let val = self.edit_buffer.read().clone();
         if let Some(edge) = self.edges.write().get_mut(idx) {
-            edge.label = if val.trim().is_empty() { None } else { Some(val) };
+            edge.label = if val.trim().is_empty() {
+                None
+            } else {
+                Some(val)
+            };
         }
         self.editing_edge.set(None);
         self.push_history();
@@ -395,7 +424,12 @@ impl WorkflowState {
     // ── rubber-band select ────────────────────────────────────────────────────
 
     pub fn start_rubber_band(&mut self, x: f64, y: f64) {
-        self.rubber_band.set(Some(RubberBandState { start_x: x, start_y: y, cur_x: x, cur_y: y }));
+        self.rubber_band.set(Some(RubberBandState {
+            start_x: x,
+            start_y: y,
+            cur_x: x,
+            cur_y: y,
+        }));
     }
 
     pub fn update_rubber_band(&mut self, x: f64, y: f64) {
@@ -408,7 +442,9 @@ impl WorkflowState {
     /// Commit: select all nodes whose AABB intersects the rubber-band rect.
     /// `canvas_origin` is the element's top-left in client coords (from `onmounted`).
     pub fn finish_rubber_band(&mut self, node_h: f64, canvas_origin: (f64, f64)) {
-        let Some(rb) = *self.rubber_band.read() else { return };
+        let Some(rb) = *self.rubber_band.read() else {
+            return;
+        };
         self.rubber_band.set(None);
         let (ox, oy) = canvas_origin;
         let rx0 = rb.start_x.min(rb.cur_x) - ox;
@@ -487,7 +523,10 @@ impl WorkflowState {
 
         let ids: Vec<String> = {
             let nodes = self.nodes.read();
-            indices.iter().filter_map(|&i| nodes.get(i).map(|n| n.id.clone())).collect()
+            indices
+                .iter()
+                .filter_map(|&i| nodes.get(i).map(|n| n.id.clone()))
+                .collect()
         };
 
         for &idx in &indices {
@@ -516,8 +555,11 @@ impl WorkflowState {
                 let (x, y) = pos[i];
                 let raw_x = (x + dx).max(0.0);
                 let raw_y = (y + dy).max(0.0);
-                pos[i] =
-                    if snap { ((raw_x / 20.0).round() * 20.0, (raw_y / 20.0).round() * 20.0) } else { (raw_x, raw_y) };
+                pos[i] = if snap {
+                    ((raw_x / 20.0).round() * 20.0, (raw_y / 20.0).round() * 20.0)
+                } else {
+                    (raw_x, raw_y)
+                };
             }
         }
         self.push_history();
@@ -532,8 +574,10 @@ impl WorkflowState {
         }
         let nodes = self.nodes.read();
         let pos = self.positions.read();
-        let cb: Vec<(WorkflowNode, f64, f64)> =
-            sel.iter().filter_map(|&i| nodes.get(i).map(|n| (n.clone(), pos[i].0, pos[i].1))).collect();
+        let cb: Vec<(WorkflowNode, f64, f64)> = sel
+            .iter()
+            .filter_map(|&i| nodes.get(i).map(|n| (n.clone(), pos[i].0, pos[i].1)))
+            .collect();
         self.clipboard.set(cb);
     }
 
@@ -553,7 +597,12 @@ impl WorkflowState {
 
             let n = *self.next_id.read();
             *self.next_id.write() = n + 1;
-            let new_node = WorkflowNode { id: format!("node-{n}"), initial_x: nx, initial_y: ny, ..node.clone() };
+            let new_node = WorkflowNode {
+                id: format!("node-{n}"),
+                initial_x: nx,
+                initial_y: ny,
+                ..node.clone()
+            };
             let new_idx = self.positions.read().len();
             self.positions.write().push((nx, ny));
             self.nodes.write().push(new_node);
@@ -591,14 +640,21 @@ impl WorkflowState {
             let (node, x, y) = {
                 let nodes = self.nodes.read();
                 let pos = self.positions.read();
-                let Some(node) = nodes.get(*idx) else { continue };
+                let Some(node) = nodes.get(*idx) else {
+                    continue;
+                };
                 (node.clone(), pos[*idx].0, pos[*idx].1)
             };
             let nx = x + 20.0;
             let ny = y + 20.0;
             let n = *self.next_id.read();
             *self.next_id.write() = n + 1;
-            let new_node = WorkflowNode { id: format!("node-{n}"), initial_x: nx, initial_y: ny, ..node };
+            let new_node = WorkflowNode {
+                id: format!("node-{n}"),
+                initial_x: nx,
+                initial_y: ny,
+                ..node
+            };
             let new_idx = self.positions.read().len();
             self.positions.write().push((nx, ny));
             self.nodes.write().push(new_node);
@@ -627,7 +683,12 @@ impl WorkflowState {
         let ny = y + 20.0;
         let n = *self.next_id.read();
         *self.next_id.write() = n + 1;
-        let new_node = WorkflowNode { id: format!("node-{n}"), initial_x: nx, initial_y: ny, ..node };
+        let new_node = WorkflowNode {
+            id: format!("node-{n}"),
+            initial_x: nx,
+            initial_y: ny,
+            ..node
+        };
         let new_idx = self.positions.read().len();
         self.positions.write().push((nx, ny));
         self.nodes.write().push(new_node);
@@ -706,7 +767,12 @@ impl WorkflowState {
             let sel = self.selected.read();
             sel.iter().map(|&i| (i, pos[i].0, pos[i].1)).collect()
         };
-        self.drag.set(Some(DragState { node_idx: idx, mouse_start_x: mx, mouse_start_y: my, starts }));
+        self.drag.set(Some(DragState {
+            node_idx: idx,
+            mouse_start_x: mx,
+            mouse_start_y: my,
+            starts,
+        }));
     }
 
     pub fn update_drag(&mut self, mx: f64, my: f64) {
@@ -721,8 +787,11 @@ impl WorkflowState {
         for (idx, sx, sy) in &d.starts {
             let raw_x = (sx + dx).max(0.0);
             let raw_y = (sy + dy).max(0.0);
-            self.positions.write()[*idx] =
-                if snap { ((raw_x / 20.0).round() * 20.0, (raw_y / 20.0).round() * 20.0) } else { (raw_x, raw_y) };
+            self.positions.write()[*idx] = if snap {
+                ((raw_x / 20.0).round() * 20.0, (raw_y / 20.0).round() * 20.0)
+            } else {
+                (raw_x, raw_y)
+            };
         }
     }
 
@@ -762,12 +831,20 @@ impl WorkflowState {
 
     pub fn start_pan(&mut self, mx: f64, my: f64) {
         let (px, py) = *self.pan.read();
-        self.canvas_drag.set(Some(PanState { mouse_start_x: mx, mouse_start_y: my, pan_start_x: px, pan_start_y: py }));
+        self.canvas_drag.set(Some(PanState {
+            mouse_start_x: mx,
+            mouse_start_y: my,
+            pan_start_x: px,
+            pan_start_y: py,
+        }));
     }
 
     pub fn update_pan(&mut self, mx: f64, my: f64) {
         if let Some(d) = *self.canvas_drag.read() {
-            self.pan.set((d.pan_start_x + mx - d.mouse_start_x, d.pan_start_y + my - d.mouse_start_y));
+            self.pan.set((
+                d.pan_start_x + mx - d.mouse_start_x,
+                d.pan_start_y + my - d.mouse_start_y,
+            ));
         }
     }
 
@@ -783,7 +860,11 @@ impl WorkflowState {
 
     pub fn start_pinch(&mut self, dist: f64, cx: f64, cy: f64) {
         self.stop_pan();
-        self.touch_pinch.set(Some(PinchState { prev_dist: dist, cx, cy }));
+        self.touch_pinch.set(Some(PinchState {
+            prev_dist: dist,
+            cx,
+            cy,
+        }));
     }
 
     pub fn update_pinch(&mut self, dist: f64, cx: f64, cy: f64) {
@@ -795,7 +876,11 @@ impl WorkflowState {
             let scale = dist / prev.prev_dist;
             self.zoom_at_scale(cx, cy, scale);
         }
-        self.touch_pinch.set(Some(PinchState { prev_dist: dist, cx, cy }));
+        self.touch_pinch.set(Some(PinchState {
+            prev_dist: dist,
+            cx,
+            cy,
+        }));
     }
 
     pub fn stop_pinch(&mut self) {
@@ -808,7 +893,8 @@ impl WorkflowState {
         let new_z = (old_z * scale).clamp(0.2, 4.0);
         let ratio = new_z / old_z;
         let (px, py) = *self.pan.read();
-        self.pan.set((ex - (ex - px) * ratio, ey - (ey - py) * ratio));
+        self.pan
+            .set((ex - (ex - px) * ratio, ey - (ey - py) * ratio));
         self.zoom.set(new_z);
     }
 
@@ -824,7 +910,8 @@ impl WorkflowState {
         let new_z = (old_z * factor).clamp(0.2, 4.0);
         let ratio = new_z / old_z;
         let (px, py) = *self.pan.read();
-        self.pan.set((ex - (ex - px) * ratio, ey - (ey - py) * ratio));
+        self.pan
+            .set((ex - (ex - px) * ratio, ey - (ey - py) * ratio));
         self.zoom.set(new_z);
     }
 
@@ -835,7 +922,8 @@ impl WorkflowState {
         let cx = 400.0_f64;
         let cy = 225.0_f64;
         let (px, py) = *self.pan.read();
-        self.pan.set((cx - (cx - px) * ratio, cy - (cy - py) * ratio));
+        self.pan
+            .set((cx - (cx - px) * ratio, cy - (cy - py) * ratio));
         self.zoom.set(new_z);
     }
 
@@ -859,18 +947,38 @@ impl WorkflowState {
         }
         let padding = 48.0;
         let pos = self.positions.read();
-        let min_x = nodes.iter().enumerate().map(|(i, _)| pos[i].0).fold(f64::INFINITY, f64::min);
-        let min_y = nodes.iter().enumerate().map(|(i, _)| pos[i].1).fold(f64::INFINITY, f64::min);
-        let max_x = nodes.iter().enumerate().map(|(i, n)| pos[i].0 + n.width).fold(f64::NEG_INFINITY, f64::max);
-        let max_y = nodes.iter().enumerate().map(|(i, _)| pos[i].1 + node_h).fold(f64::NEG_INFINITY, f64::max);
+        let min_x = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, _)| pos[i].0)
+            .fold(f64::INFINITY, f64::min);
+        let min_y = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, _)| pos[i].1)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| pos[i].0 + n.width)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let max_y = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, _)| pos[i].1 + node_h)
+            .fold(f64::NEG_INFINITY, f64::max);
         drop(pos);
         drop(nodes);
         let content_w = (max_x - min_x).max(1.0);
         let content_h = (max_y - min_y).max(1.0);
-        let z =
-            ((viewport_w - padding * 2.0) / content_w).min((viewport_h - padding * 2.0) / content_h).clamp(0.2, 4.0);
+        let z = ((viewport_w - padding * 2.0) / content_w)
+            .min((viewport_h - padding * 2.0) / content_h)
+            .clamp(0.2, 4.0);
         self.zoom.set(z);
-        self.pan.set(((viewport_w - content_w * z) / 2.0 - min_x * z, (viewport_h - content_h * z) / 2.0 - min_y * z));
+        self.pan.set((
+            (viewport_w - content_w * z) / 2.0 - min_x * z,
+            (viewport_h - content_h * z) / 2.0 - min_y * z,
+        ));
     }
 
     // ── edges ────────────────────────────────────────────────────────────────
@@ -944,5 +1052,9 @@ pub fn use_workflow(nodes: Vec<WorkflowNode>, edges: Vec<WorkflowEdge>) -> Workf
 fn bezier_path(sx: f64, sy: f64, tx: f64, ty: f64) -> String {
     let dx = (tx - sx).abs();
     let offset = (dx / 2.0).clamp(40.0, 80.0);
-    format!("M {sx:.1} {sy:.1} C {:.1} {sy:.1}, {:.1} {ty:.1}, {tx:.1} {ty:.1}", sx + offset, tx - offset,)
+    format!(
+        "M {sx:.1} {sy:.1} C {:.1} {sy:.1}, {:.1} {ty:.1}, {tx:.1} {ty:.1}",
+        sx + offset,
+        tx - offset,
+    )
 }

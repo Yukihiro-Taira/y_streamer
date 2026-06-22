@@ -73,8 +73,14 @@ pub fn WfNodeTitle(#[props(into, optional)] class: Option<String>, children: Ele
 }
 
 #[component]
-pub fn WfNodeDescription(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
-    let merged = tw_merge!("text-[10px] text-muted-foreground", class.as_deref().unwrap_or(""));
+pub fn WfNodeDescription(
+    #[props(into, optional)] class: Option<String>,
+    children: Element,
+) -> Element {
+    let merged = tw_merge!(
+        "text-[10px] text-muted-foreground",
+        class.as_deref().unwrap_or("")
+    );
     rsx! { p { class: "{merged}", {children} } }
 }
 
@@ -103,7 +109,11 @@ pub fn WfNodeFooter(#[props(into, optional)] class: Option<String>, children: El
 // └── overlay (viewport space — WorkflowControls, WorkflowMinimap, etc.)
 
 #[component]
-pub fn WorkflowCanvas(state: WorkflowState, children: Element, #[props(optional)] overlay: Option<Element>) -> Element {
+pub fn WorkflowCanvas(
+    state: WorkflowState,
+    children: Element,
+    #[props(optional)] overlay: Option<Element>,
+) -> Element {
     let is_busy = state.is_dragging() || state.is_panning();
     let is_rubber_banding = state.rubber_band.read().is_some();
     let locked = state.is_locked();
@@ -733,15 +743,26 @@ pub fn WorkflowMinimap(state: WorkflowState) -> Element {
         .enumerate()
         .map(|(i, n)| {
             let (x, y) = pos_snap[i];
-            (x * scale_x, y * scale_y, n.width * scale_x, NODE_H * scale_y)
+            (
+                x * scale_x,
+                y * scale_y,
+                n.width * scale_x,
+                NODE_H * scale_y,
+            )
         })
         .collect();
 
     let edge_paths: Vec<String> = edges_snap
         .iter()
         .filter_map(|edge| {
-            let (fi, from) = nodes_snap.iter().enumerate().find(|(_, n)| n.id == edge.from)?;
-            let (ti, _) = nodes_snap.iter().enumerate().find(|(_, n)| n.id == edge.to)?;
+            let (fi, from) = nodes_snap
+                .iter()
+                .enumerate()
+                .find(|(_, n)| n.id == edge.from)?;
+            let (ti, _) = nodes_snap
+                .iter()
+                .enumerate()
+                .find(|(_, n)| n.id == edge.to)?;
             let (fx, fy) = pos_snap[fi];
             let (tx, ty) = pos_snap[ti];
             let sx = (fx + from.width) * scale_x;
@@ -750,7 +771,11 @@ pub fn WorkflowMinimap(state: WorkflowState) -> Element {
             let ty2 = (ty + NODE_H / 2.0) * scale_y;
             let dx = (tx2 - sx).abs();
             let off = (dx / 2.0).clamp(4.0, 12.0);
-            Some(format!("M {sx:.1} {sy:.1} C {:.1} {sy:.1}, {:.1} {ty2:.1}, {tx2:.1} {ty2:.1}", sx + off, tx2 - off,))
+            Some(format!(
+                "M {sx:.1} {sy:.1} C {:.1} {sy:.1}, {:.1} {ty2:.1}, {tx2:.1} {ty2:.1}",
+                sx + off,
+                tx2 - off,
+            ))
         })
         .collect();
 

@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 
-use crate::components::hooks::use_workflow::{WorkflowEdge, WorkflowNode, WorkflowNodeKind, use_workflow};
-use crate::components::workflow::{WorkflowCanvas, WorkflowControls, WorkflowDefaultNode, WorkflowNodeWrapper};
+use crate::components::hooks::use_workflow::{
+    WorkflowEdge, WorkflowNode, WorkflowNodeKind, use_workflow,
+};
+use crate::components::workflow::{
+    WorkflowCanvas, WorkflowControls, WorkflowDefaultNode, WorkflowNodeWrapper,
+};
 
 fn initial_nodes() -> Vec<WorkflowNode> {
     vec![
@@ -54,9 +58,21 @@ fn initial_nodes() -> Vec<WorkflowNode> {
 
 fn initial_edges() -> Vec<WorkflowEdge> {
     vec![
-        WorkflowEdge { from: "trigger".to_string(), to: "agent".to_string(), ..Default::default() },
-        WorkflowEdge { from: "data".to_string(), to: "agent".to_string(), ..Default::default() },
-        WorkflowEdge { from: "agent".to_string(), to: "output".to_string(), ..Default::default() },
+        WorkflowEdge {
+            from: "trigger".to_string(),
+            to: "agent".to_string(),
+            ..Default::default()
+        },
+        WorkflowEdge {
+            from: "data".to_string(),
+            to: "agent".to_string(),
+            ..Default::default()
+        },
+        WorkflowEdge {
+            from: "agent".to_string(),
+            to: "output".to_string(),
+            ..Default::default()
+        },
     ]
 }
 

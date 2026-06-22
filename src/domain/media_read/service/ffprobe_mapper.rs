@@ -208,7 +208,13 @@ fn flatten_side_data(value: Option<Value>) -> Vec<MediaKeyValue> {
             if let Value::Object(mut map) = item {
                 let key = map
                     .remove("side_data_type")
-                    .and_then(|v| if let Value::String(s) = v { Some(s) } else { None })
+                    .and_then(|v| {
+                        if let Value::String(s) = v {
+                            Some(s)
+                        } else {
+                            None
+                        }
+                    })
                     .unwrap_or_else(|| "unknown".into());
                 let value = map
                     .into_iter()
