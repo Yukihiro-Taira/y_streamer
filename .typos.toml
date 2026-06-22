@@ -1,2 +1,8 @@
-[default]
-extend-ignore-identifiers-re = []
+[default.extend-words]
+# MP4 box atom name (ISO 14496-12)
+trak = "trak"
+# HDR metadata term (MaxCLL = Max Content Light Level)
+CLL = "CLL"
+
+[files]
+extend-exclude = ["CALL_TRANSCRIPT_*.md"]
