@@ -8,6 +8,10 @@ use crate::domain::media_read::data::media_probe_report::{
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::ffprobe_runner::inspect_media_path;
 #[cfg(feature = "server")]
+use crate::domain::media_read::service::loudness_runner::run_loudness;
+#[cfg(feature = "server")]
+use crate::domain::media_read::service::mediainfo_runner::run_mediainfo;
+#[cfg(feature = "server")]
 use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::subtitle_extractor::extract_subtitles;
@@ -167,33 +171,60 @@ pub async fn media_read_upload_handler(
                 }
             };
 
-            if report.video_count > 0 {
-                let duration_secs: f64 = report
-                    .duration
-                    .split_whitespace()
-                    .next()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0.0);
-                report.thumbnails = generate_thumbnails(
-                    &config.ffmpeg_bin,
-                    &temp_path,
-                    duration_secs,
-                    &trace_id,
-                    &config.temp_dir,
-                )
-                .await;
-            }
+            // Run thumbnails, subtitles, mediainfo, loudness in parallel
+            let duration_secs: f64 = report
+                .duration
+                .split_whitespace()
+                .next()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.0);
+            let has_video = report.video_count > 0;
+            let has_audio = report.audio_count > 0;
+            let streams_clone = report.streams.clone();
 
-            if report.subtitle_count > 0 {
-                report.subtitles = extract_subtitles(
-                    &config.ffmpeg_bin,
-                    &temp_path,
-                    &report.streams.clone(),
-                    &trace_id,
-                    &config.temp_dir,
-                )
-                .await;
-            }
+            let (thumbnails, subtitles, mediainfo, loudness) = tokio::join!(
+                async {
+                    if has_video {
+                        generate_thumbnails(
+                            &config.ffmpeg_bin,
+                            &temp_path,
+                            duration_secs,
+                            &trace_id,
+                            &config.temp_dir,
+                        )
+                        .await
+                    } else {
+                        vec![]
+                    }
+                },
+                async {
+                    if report.subtitle_count > 0 {
+                        extract_subtitles(
+                            &config.ffmpeg_bin,
+                            &temp_path,
+                            &streams_clone,
+                            &trace_id,
+                            &config.temp_dir,
+                        )
+                        .await
+                    } else {
+                        vec![]
+                    }
+                },
+                run_mediainfo(&config.mediainfo_bin, &temp_path),
+                async {
+                    if has_audio {
+                        run_loudness(&config.ffmpeg_bin, &temp_path).await
+                    } else {
+                        None
+                    }
+                },
+            );
+
+            report.thumbnails = thumbnails;
+            report.subtitles = subtitles;
+            report.mediainfo = mediainfo;
+            report.loudness = loudness;
 
             if let Err(err) = tokio::fs::remove_file(&temp_path).await {
                 warn!(temp_path = %temp_path.display(), error = %err, "temp file cleanup failed");

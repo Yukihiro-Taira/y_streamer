@@ -9,6 +9,7 @@ pub(crate) struct MediaReadRuntimeConfig {
     pub(crate) temp_dir: PathBuf,
     pub(crate) ffprobe_bin: String,
     pub(crate) ffmpeg_bin: String,
+    pub(crate) mediainfo_bin: String,
 }
 
 #[cfg(feature = "server")]
@@ -32,6 +33,10 @@ impl MediaReadRuntimeConfig {
                 .ok()
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "ffmpeg".into()),
+            mediainfo_bin: std::env::var("MEDIA_INSPECTOR_MEDIAINFO_BIN")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "mediainfo".into()),
         }
     }
 }

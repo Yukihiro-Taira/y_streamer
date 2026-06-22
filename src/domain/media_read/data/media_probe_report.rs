@@ -30,6 +30,10 @@ pub struct MediaProbeReport {
     pub thumbnails: Vec<String>,
     /// Extracted subtitle streams, empty if none found
     pub subtitles: Vec<MediaSubtitle>,
+    /// mediainfo report, None if mediainfo not installed
+    pub mediainfo: Option<MediaInfoReport>,
+    /// R128 loudness analysis, None if no audio or ffmpeg ebur128 failed
+    pub loudness: Option<LoudnessReport>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -111,4 +115,48 @@ pub struct MediaChapterInfo {
 pub struct MediaKeyValue {
     pub key: String,
     pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct MediaInfoReport {
+    /// e.g. "HDR10", "Dolby Vision", "HLG", "" if SDR
+    pub hdr_format: String,
+    /// e.g. "HDR10 / Dolby Vision" compatibility string
+    pub hdr_format_compatibility: String,
+    /// e.g. "x264 core 164 r3095", "DaVinci Resolve Studio 18.6"
+    pub writing_library: String,
+    /// NLE / encoder application name
+    pub encoded_application: String,
+    /// Audio delay relative to video in ms
+    pub audio_delay_ms: String,
+    /// "NTSC", "PAL", "" if unknown
+    pub standard: String,
+    /// e.g. "High@L4.0"
+    pub format_profile: String,
+    /// Frame rate numerator (e.g. "24000")
+    pub frame_rate_num: String,
+    /// Frame rate denominator (e.g. "1001")
+    pub frame_rate_den: String,
+    /// Interlace scan order: "TFF", "BFF", "" if progressive
+    pub scan_order: String,
+    /// Bit depth from mediainfo (sometimes more accurate than ffprobe)
+    pub bit_depth: String,
+    /// Full mediainfo JSON output
+    pub raw_json: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct LoudnessReport {
+    /// Integrated loudness in LUFS (e.g. "-23.0")
+    pub integrated_lufs: String,
+    /// Loudness threshold used for integrated measurement
+    pub integrated_threshold: String,
+    /// Loudness range in LU (e.g. "7.2")
+    pub lra_lu: String,
+    /// LRA low in LUFS
+    pub lra_low: String,
+    /// LRA high in LUFS
+    pub lra_high: String,
+    /// True peak in dBTP (e.g. "-1.2")
+    pub true_peak_dbtp: String,
 }

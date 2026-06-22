@@ -41,6 +41,7 @@ pub(crate) async fn inspect_media_path(
             "-show_chapters",
             "-show_programs",
             "-show_stream_groups",
+            "-show_private_data",
         ]);
         command.arg(path);
 
