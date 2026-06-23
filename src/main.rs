@@ -84,7 +84,7 @@ fn main() {
                 )),
             )
             .route(
-                "/api/media-read/progress/:trace_id",
+                "/api/media-read/progress/{trace_id}",
                 get(progress_get_handler),
             )
             .route(
