@@ -38,6 +38,13 @@
 | **Bitrate control** | Set target bitrate / CRF |
 | **Batch jobs** | Queue multiple files, process in parallel |
 | **Watermark** | Overlay image/text on video |
+| **Audio Broadacast Convert** | converts audio tracks to Broadcast deleviery specs(stereo to mono)(atmos,5.1 convert)|
+| **Keyframe detection/analasis** | detects the keyframe data and returns analitical data of each keyframe|
+| **HDR processing** | detects HDR content(already does)enables lvl changing or format convertion(PQ to HDR10),nits control(1000 nits -> 400nits|| 400bits -> 3000nits etc..)|
+| **Audio Spectrum analyzer** | audio track spectrum analyzer for audio visulization|
+| **Audio sync control(slipping,move foward/back)** | converts audio tracks to Broadcast deleviery specs(stereo to mono)(atmos,5.1 convert)|
+| **Timecode** | reads timecode and has the ability to change the timecode value|
+| **Subtitles** | reads/writes subtitiles into CEA-608/CEA-708, subtitle timing adjustments along with editing|
 
 ---
 
@@ -52,6 +59,7 @@
 | **Job progress bar UI** | Visual progress tied to `media_write` jobs |
 | **Video player** | In-app playback of uploaded / processed files |
 | **Dark mode** | Already have CSS vars, just needs a toggle |
+| **side menu resize** | enables the side bar to be resized|
 
 ---
 
