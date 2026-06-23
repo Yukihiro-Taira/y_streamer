@@ -28,19 +28,25 @@ pub fn DiagnosticPage() -> Element {
     let mut drag_active = use_signal(|| false);
     let mut profile = use_signal(|| PlatformProfile::Web);
     let mut progress = use_signal(|| None::<DiagnosticProgress>);
+    let mut upload_progress = use_signal(|| None::<(u64, u64)>);
 
     let mut inspect = move |file: dioxus::html::FileData| {
         error.set(None);
         probe_report.set(None);
         diagnostic.set(None);
         progress.set(None);
+        upload_progress.set(None);
         loading.set(true);
 
         spawn({
             let current_profile = profile();
             async move {
                 // Phase 1: upload file, get trace_id immediately
-                let trace_id = match start_upload(file).await {
+                let trace_id = match start_upload(file, move |loaded, total| {
+                    upload_progress.set(Some((loaded, total)));
+                })
+                .await
+                {
                     Ok(t) => t,
                     Err(e) => {
                         error.set(Some(e));
@@ -48,6 +54,7 @@ pub fn DiagnosticPage() -> Element {
                         return;
                     }
                 };
+                upload_progress.set(None);
 
                 // Phase 2: poll progress until Done or Failed
                 #[cfg(target_arch = "wasm32")]
@@ -170,9 +177,7 @@ pub fn DiagnosticPage() -> Element {
                 if let Some(p) = progress() {
                     ProgressPanel { progress: p }
                 } else {
-                    div { class: "rounded-xl border border-border bg-muted/20 px-4 py-4",
-                        p { class: "text-sm text-muted-foreground animate-pulse", "Uploading file…" }
-                    }
+                    UploadingPanel { progress: upload_progress() }
                 }
             }
             if let Some(err) = error() {
@@ -352,6 +357,40 @@ fn CheckRow(check: DiagnosticCheck) -> Element {
     }
 }
 
+// ── Upload progress panel ─────────────────────────────────────────────────────
+
+#[component]
+fn UploadingPanel(progress: Option<(u64, u64)>) -> Element {
+    rsx! {
+        div { class: "rounded-xl border border-border bg-muted/20 px-4 py-4 space-y-3",
+            div { class: "flex items-center gap-2",
+                span { class: "size-2 rounded-full bg-primary animate-pulse inline-block" }
+                p { class: "text-sm font-medium", "Uploading…" }
+            }
+            if let Some((loaded, total)) = progress {
+                {
+                    let pct = loaded.checked_mul(100).and_then(|v| v.checked_div(total)).unwrap_or(0) as u32;
+                    let loaded_mb = loaded as f64 / (1024.0 * 1024.0);
+                    let total_mb = total as f64 / (1024.0 * 1024.0);
+                    rsx! {
+                        div { class: "space-y-1",
+                            div { class: "h-2 w-full rounded-full bg-muted overflow-hidden",
+                                div {
+                                    class: "h-2 rounded-full bg-primary transition-all duration-200",
+                                    style: "width: {pct}%",
+                                }
+                            }
+                            p { class: "text-xs text-muted-foreground",
+                                "{pct}%  ·  {loaded_mb:.1} MB / {total_mb:.1} MB"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Progress panel ────────────────────────────────────────────────────────────
 
 #[component]
@@ -452,10 +491,14 @@ async fn sleep_ms(ms: i32) {
     let _ = JsFuture::from(promise).await;
 }
 
-async fn start_upload(file: dioxus::html::FileData) -> Result<String, String> {
+async fn start_upload(
+    file: dioxus::html::FileData,
+    on_progress: impl FnMut(u64, u64) + 'static,
+) -> Result<String, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use crate::domain::media_read::data::diagnostic_progress::StartUploadResponse;
+        use wasm_bindgen::closure::Closure;
 
         let web_file = file
             .inner()
@@ -463,55 +506,69 @@ async fn start_upload(file: dioxus::html::FileData) -> Result<String, String> {
             .cloned()
             .ok_or_else(|| "failed to access browser file handle".to_string())?;
 
-        let form_data = web_sys::FormData::new().map_err(js_err)?;
-        form_data
-            .append_with_blob_and_filename("file", &web_file, &web_file.name())
+        let xhr = web_sys::XmlHttpRequest::new().map_err(js_err)?;
+        xhr.open("POST", "/api/media-read/start").map_err(js_err)?;
+        xhr.set_request_header("Accept", "application/json")
             .map_err(js_err)?;
 
-        let options = web_sys::RequestInit::new();
-        options.set_method("POST");
-        options.set_body(&form_data);
+        // XHR upload progress (fetch API has no upload progress events)
+        let upload = xhr.upload().map_err(js_err)?;
+        let mut on_progress = on_progress;
+        let prog_cb = Closure::wrap(Box::new(move |evt: web_sys::ProgressEvent| {
+            if evt.length_computable() {
+                on_progress(evt.loaded() as u64, evt.total() as u64);
+            }
+        }) as Box<dyn FnMut(web_sys::ProgressEvent)>);
+        upload.set_onprogress(Some(prog_cb.as_ref().unchecked_ref()));
+        prog_cb.forget();
 
-        let request = web_sys::Request::new_with_str_and_init("/api/media-read/start", &options)
+        // Wrap onload/onerror as a Promise so we can .await
+        let xhr_clone = xhr.clone();
+        let promise = js_sys::Promise::new(&mut |resolve, reject| {
+            let load_cb = Closure::wrap(Box::new(move |_: web_sys::Event| {
+                let _ = resolve.call0(&wasm_bindgen::JsValue::NULL);
+            }) as Box<dyn FnMut(web_sys::Event)>);
+            xhr_clone.set_onload(Some(load_cb.as_ref().unchecked_ref()));
+            load_cb.forget();
+
+            let err_cb = Closure::wrap(Box::new(move |_: web_sys::Event| {
+                let _ = reject.call1(
+                    &wasm_bindgen::JsValue::NULL,
+                    &wasm_bindgen::JsValue::from_str("xhr network error"),
+                );
+            }) as Box<dyn FnMut(web_sys::Event)>);
+            xhr_clone.set_onerror(Some(err_cb.as_ref().unchecked_ref()));
+            err_cb.forget();
+        });
+
+        let form = web_sys::FormData::new().map_err(js_err)?;
+        form.append_with_blob_and_filename("file", &web_file, &web_file.name())
             .map_err(js_err)?;
-        request
-            .headers()
-            .set("Accept", "application/json")
-            .map_err(js_err)?;
+        xhr.send_with_opt_form_data(Some(&form)).map_err(js_err)?;
 
-        let window = web_sys::window().ok_or_else(|| "missing browser window".to_string())?;
-        let response = JsFuture::from(window.fetch_with_request(&request))
-            .await
-            .map_err(js_err)?;
-        let response: web_sys::Response = response
-            .dyn_into()
-            .map_err(|_| "failed to cast fetch response".to_string())?;
+        JsFuture::from(promise).await.map_err(js_err)?;
 
-        let body = JsFuture::from(response.text().map_err(js_err)?)
-            .await
-            .map_err(js_err)?
-            .as_string()
-            .unwrap_or_default();
+        let status = xhr.status().map_err(js_err)?;
+        let body = xhr.response_text().ok().flatten().unwrap_or_default();
 
-        if !response.ok() {
+        if status >= 400 {
             if let Ok(e) = serde_json::from_str::<MediaProbeErrorResponse>(&body) {
                 return Err(format!(
                     "HTTP {} [{}]: {}",
-                    response.status(),
-                    e.trace_id,
-                    e.message
+                    status, e.trace_id, e.message
                 ));
             }
-            return Err(format!("HTTP {}: {}", response.status(), body));
+            return Err(format!("HTTP {}: {}", status, body));
         }
 
-        let resp: StartUploadResponse = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let resp: StartUploadResponse =
+            serde_json::from_str(&body).map_err(|e| e.to_string())?;
         Ok(resp.trace_id)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let _ = file;
+        let _ = (file, on_progress);
         Err("only available in browser build".into())
     }
 }
