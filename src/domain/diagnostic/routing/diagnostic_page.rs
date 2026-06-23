@@ -497,8 +497,9 @@ async fn start_upload(
 ) -> Result<String, String> {
     #[cfg(target_arch = "wasm32")]
     {
-        use crate::domain::media_read::data::diagnostic_progress::StartUploadResponse;
         use wasm_bindgen::closure::Closure;
+
+        use crate::domain::media_read::data::diagnostic_progress::StartUploadResponse;
 
         let web_file = file
             .inner()
@@ -553,16 +554,12 @@ async fn start_upload(
 
         if status >= 400 {
             if let Ok(e) = serde_json::from_str::<MediaProbeErrorResponse>(&body) {
-                return Err(format!(
-                    "HTTP {} [{}]: {}",
-                    status, e.trace_id, e.message
-                ));
+                return Err(format!("HTTP {} [{}]: {}", status, e.trace_id, e.message));
             }
             return Err(format!("HTTP {}: {}", status, body));
         }
 
-        let resp: StartUploadResponse =
-            serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let resp: StartUploadResponse = serde_json::from_str(&body).map_err(|e| e.to_string())?;
         Ok(resp.trace_id)
     }
 
