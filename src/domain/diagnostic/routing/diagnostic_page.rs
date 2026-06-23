@@ -50,18 +50,14 @@ pub fn DiagnosticPage() -> Element {
                 };
 
                 // Phase 2: poll progress until Done or Failed
+                #[cfg(target_arch = "wasm32")]
                 loop {
-                    #[cfg(target_arch = "wasm32")]
                     sleep_ms(500).await;
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        break;
-                    }
 
                     match poll_progress(&trace_id).await {
                         Ok(p) => match p.stage.clone() {
                             ProgressStage::Done { report } => {
-                                let diag = diagnostic_rules::run(&*report, &current_profile);
+                                let diag = diagnostic_rules::run(&report, &current_profile);
                                 diagnostic.set(Some(diag));
                                 probe_report.set(Some(*report));
                                 progress.set(None);
@@ -85,6 +81,8 @@ pub fn DiagnosticPage() -> Element {
                         }
                     }
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                loading.set(false);
             }
         });
     };
