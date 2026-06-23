@@ -26,4 +26,7 @@ psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE $POSTGRES_
 echo "Running migrations with sqlx"
 sqlx migrate run
 
+echo "Generating .sqlx offline query cache..."
+cargo sqlx prepare --workspace -- --features server
+
 echo "Done ✔️"
