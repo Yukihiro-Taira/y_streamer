@@ -10,9 +10,9 @@ use crate::domain::diagnostic::data::diagnostic_report::{
 };
 use crate::domain::diagnostic::data::platform_profile::PlatformProfile;
 use crate::domain::diagnostic::service::diagnostic_rules;
+use crate::domain::media_read::data::diagnostic_progress::{DiagnosticProgress, ProgressStage};
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
-use crate::domain::media_read::data::diagnostic_progress::{DiagnosticProgress, ProgressStage};
 use crate::domain::media_read::data::media_probe_report::{
     LoudnessReport, MediaInfoReport, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
@@ -54,7 +54,9 @@ pub fn DiagnosticPage() -> Element {
                     #[cfg(target_arch = "wasm32")]
                     sleep_ms(500).await;
                     #[cfg(not(target_arch = "wasm32"))]
-                    { break; }
+                    {
+                        break;
+                    }
 
                     match poll_progress(&trace_id).await {
                         Ok(p) => match p.stage.clone() {
@@ -446,10 +448,7 @@ async fn sleep_ms(ms: i32) {
     let promise = js_sys::Promise::new(&mut |resolve, _| {
         web_sys::window()
             .unwrap()
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                &resolve,
-                ms,
-            )
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms)
             .unwrap();
     });
     let _ = JsFuture::from(promise).await;
@@ -475,9 +474,8 @@ async fn start_upload(file: dioxus::html::FileData) -> Result<String, String> {
         options.set_method("POST");
         options.set_body(&form_data);
 
-        let request =
-            web_sys::Request::new_with_str_and_init("/api/media-read/start", &options)
-                .map_err(js_err)?;
+        let request = web_sys::Request::new_with_str_and_init("/api/media-read/start", &options)
+            .map_err(js_err)?;
         request
             .headers()
             .set("Accept", "application/json")
@@ -509,8 +507,7 @@ async fn start_upload(file: dioxus::html::FileData) -> Result<String, String> {
             return Err(format!("HTTP {}: {}", response.status(), body));
         }
 
-        let resp: StartUploadResponse =
-            serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let resp: StartUploadResponse = serde_json::from_str(&body).map_err(|e| e.to_string())?;
         Ok(resp.trace_id)
     }
 
@@ -528,8 +525,7 @@ async fn poll_progress(trace_id: &str) -> Result<DiagnosticProgress, String> {
         let options = web_sys::RequestInit::new();
         options.set_method("GET");
 
-        let request =
-            web_sys::Request::new_with_str_and_init(&url, &options).map_err(js_err)?;
+        let request = web_sys::Request::new_with_str_and_init(&url, &options).map_err(js_err)?;
         request
             .headers()
             .set("Accept", "application/json")
