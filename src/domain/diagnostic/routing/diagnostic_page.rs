@@ -12,6 +12,7 @@ use crate::domain::diagnostic::data::platform_profile::PlatformProfile;
 use crate::domain::diagnostic::service::diagnostic_rules;
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
+use crate::domain::media_read::data::diagnostic_progress::{DiagnosticProgress, ProgressStage};
 use crate::domain::media_read::data::media_probe_report::{
     LoudnessReport, MediaInfoReport, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
 };
@@ -26,29 +27,62 @@ pub fn DiagnosticPage() -> Element {
     let mut loading = use_signal(|| false);
     let mut drag_active = use_signal(|| false);
     let mut profile = use_signal(|| PlatformProfile::Web);
+    let mut progress = use_signal(|| None::<DiagnosticProgress>);
 
     let mut inspect = move |file: dioxus::html::FileData| {
         error.set(None);
         probe_report.set(None);
         diagnostic.set(None);
+        progress.set(None);
         loading.set(true);
 
         spawn({
-            let mut loading = loading;
-            let mut error = error;
-            let mut probe_report = probe_report;
-            let mut diagnostic = diagnostic;
             let current_profile = profile();
             async move {
-                match upload_file(file).await {
-                    Ok(r) => {
-                        let diag = diagnostic_rules::run(&r, &current_profile);
-                        diagnostic.set(Some(diag));
-                        probe_report.set(Some(r));
+                // Phase 1: upload file, get trace_id immediately
+                let trace_id = match start_upload(file).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        error.set(Some(e));
+                        loading.set(false);
+                        return;
                     }
-                    Err(e) => error.set(Some(e)),
+                };
+
+                // Phase 2: poll progress until Done or Failed
+                loop {
+                    #[cfg(target_arch = "wasm32")]
+                    sleep_ms(500).await;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    { break; }
+
+                    match poll_progress(&trace_id).await {
+                        Ok(p) => match p.stage.clone() {
+                            ProgressStage::Done { report } => {
+                                let diag = diagnostic_rules::run(&*report, &current_profile);
+                                diagnostic.set(Some(diag));
+                                probe_report.set(Some(*report));
+                                progress.set(None);
+                                loading.set(false);
+                                break;
+                            }
+                            ProgressStage::Failed { message } => {
+                                error.set(Some(message));
+                                progress.set(None);
+                                loading.set(false);
+                                break;
+                            }
+                            _ => {
+                                progress.set(Some(p));
+                            }
+                        },
+                        Err(e) => {
+                            error.set(Some(e));
+                            loading.set(false);
+                            break;
+                        }
+                    }
                 }
-                loading.set(false);
             }
         });
     };
@@ -133,7 +167,13 @@ pub fn DiagnosticPage() -> Element {
 
             // ── Status / error ───────────────────────────────────────────
             if loading() {
-                p { class: "text-sm text-muted-foreground animate-pulse", "Running ffprobe on server..." }
+                if let Some(p) = progress() {
+                    ProgressPanel { progress: p }
+                } else {
+                    div { class: "rounded-xl border border-border bg-muted/20 px-4 py-4",
+                        p { class: "text-sm text-muted-foreground animate-pulse", "Uploading file…" }
+                    }
+                }
             }
             if let Some(err) = error() {
                 p { class: "text-sm text-destructive", "Error: {err}" }
@@ -312,7 +352,218 @@ fn CheckRow(check: DiagnosticCheck) -> Element {
     }
 }
 
-// ── Upload ────────────────────────────────────────────────────────────────────
+// ── Progress panel ────────────────────────────────────────────────────────────
+
+#[component]
+fn ProgressPanel(progress: DiagnosticProgress) -> Element {
+    let stage_label = match &progress.stage {
+        ProgressStage::Uploading => "Uploading…".to_string(),
+        ProgressStage::RunningFfprobe { upload_ms } => {
+            format!("Running ffprobe… (upload took {}ms)", upload_ms)
+        }
+        ProgressStage::RunningEnrichment {
+            ffprobe_ms,
+            stream_count,
+            video_codec,
+            resolution,
+            audio_codec,
+            duration_label,
+            mediainfo_done,
+            loudness_done,
+            thumbnails_done,
+            subtitles_done,
+        } => {
+            let vc = video_codec.as_deref().unwrap_or("?");
+            let res = resolution.as_deref().unwrap_or("?");
+            let ac = audio_codec.as_deref().unwrap_or("?");
+            let dur = duration_label.as_deref().unwrap_or("?");
+            format!(
+                "Enriching… ffprobe done in {ffprobe_ms}ms | {stream_count} streams | {vc} {res} | {ac} | {dur}"
+            )
+        }
+        ProgressStage::Done { .. } => "Done".to_string(),
+        ProgressStage::Failed { message } => format!("Failed: {message}"),
+    };
+
+    let enrichment_rows: Option<Vec<(&'static str, bool)>> =
+        if let ProgressStage::RunningEnrichment {
+            mediainfo_done,
+            loudness_done,
+            thumbnails_done,
+            subtitles_done,
+            ..
+        } = &progress.stage
+        {
+            Some(vec![
+                ("mediainfo", *mediainfo_done),
+                ("loudness", *loudness_done),
+                ("thumbnails", *thumbnails_done),
+                ("subtitles", *subtitles_done),
+            ])
+        } else {
+            None
+        };
+
+    rsx! {
+        div { class: "rounded-xl border border-border bg-muted/20 px-4 py-4 space-y-3",
+            div { class: "flex items-center gap-2",
+                span { class: "size-2 rounded-full bg-primary animate-pulse inline-block" }
+                p { class: "text-sm font-medium text-foreground", "{stage_label}" }
+            }
+            if let Some(rows) = enrichment_rows {
+                div { class: "grid grid-cols-2 sm:grid-cols-4 gap-2",
+                    for (label, done) in rows {
+                        div {
+                            class: if done {
+                                "flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400"
+                            } else {
+                                "flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse"
+                            },
+                            span { if done { "✓" } else { "…" } }
+                            span { "{label}" }
+                        }
+                    }
+                }
+            }
+            p { class: "text-xs text-muted-foreground",
+                "elapsed: {progress.elapsed_ms}ms"
+                if !progress.file_name.is_empty() {
+                    " · {progress.file_name}"
+                }
+                if progress.file_bytes > 0 {
+                    " · {progress.file_bytes / 1024}KB"
+                }
+            }
+        }
+    }
+}
+
+// ── Start upload + polling ────────────────────────────────────────────────────
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep_ms(ms: i32) {
+    use wasm_bindgen::JsCast;
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                &resolve,
+                ms,
+            )
+            .unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+async fn start_upload(file: dioxus::html::FileData) -> Result<String, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use crate::domain::media_read::data::diagnostic_progress::StartUploadResponse;
+
+        let web_file = file
+            .inner()
+            .downcast_ref::<web_sys::File>()
+            .cloned()
+            .ok_or_else(|| "failed to access browser file handle".to_string())?;
+
+        let form_data = web_sys::FormData::new().map_err(js_err)?;
+        form_data
+            .append_with_blob_and_filename("file", &web_file, &web_file.name())
+            .map_err(js_err)?;
+
+        let options = web_sys::RequestInit::new();
+        options.set_method("POST");
+        options.set_body(&form_data);
+
+        let request =
+            web_sys::Request::new_with_str_and_init("/api/media-read/start", &options)
+                .map_err(js_err)?;
+        request
+            .headers()
+            .set("Accept", "application/json")
+            .map_err(js_err)?;
+
+        let window = web_sys::window().ok_or_else(|| "missing browser window".to_string())?;
+        let response = JsFuture::from(window.fetch_with_request(&request))
+            .await
+            .map_err(js_err)?;
+        let response: web_sys::Response = response
+            .dyn_into()
+            .map_err(|_| "failed to cast fetch response".to_string())?;
+
+        let body = JsFuture::from(response.text().map_err(js_err)?)
+            .await
+            .map_err(js_err)?
+            .as_string()
+            .unwrap_or_default();
+
+        if !response.ok() {
+            if let Ok(e) = serde_json::from_str::<MediaProbeErrorResponse>(&body) {
+                return Err(format!(
+                    "HTTP {} [{}]: {}",
+                    response.status(),
+                    e.trace_id,
+                    e.message
+                ));
+            }
+            return Err(format!("HTTP {}: {}", response.status(), body));
+        }
+
+        let resp: StartUploadResponse =
+            serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        Ok(resp.trace_id)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = file;
+        Err("only available in browser build".into())
+    }
+}
+
+async fn poll_progress(trace_id: &str) -> Result<DiagnosticProgress, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = format!("/api/media-read/progress/{trace_id}");
+        let options = web_sys::RequestInit::new();
+        options.set_method("GET");
+
+        let request =
+            web_sys::Request::new_with_str_and_init(&url, &options).map_err(js_err)?;
+        request
+            .headers()
+            .set("Accept", "application/json")
+            .map_err(js_err)?;
+
+        let window = web_sys::window().ok_or_else(|| "missing browser window".to_string())?;
+        let response = JsFuture::from(window.fetch_with_request(&request))
+            .await
+            .map_err(js_err)?;
+        let response: web_sys::Response = response
+            .dyn_into()
+            .map_err(|_| "failed to cast fetch response".to_string())?;
+
+        let body = JsFuture::from(response.text().map_err(js_err)?)
+            .await
+            .map_err(js_err)?
+            .as_string()
+            .unwrap_or_default();
+
+        if !response.ok() {
+            return Err(format!("poll HTTP {}: {}", response.status(), body));
+        }
+
+        serde_json::from_str::<DiagnosticProgress>(&body).map_err(|e| e.to_string())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = trace_id;
+        Err("only available in browser build".into())
+    }
+}
+
+// ── Upload (legacy — still used by media_write_page) ─────────────────────────
 
 async fn upload_file(file: dioxus::html::FileData) -> Result<MediaProbeReport, String> {
     #[cfg(target_arch = "wasm32")]

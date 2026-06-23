@@ -24,7 +24,8 @@ fn main() {
 
         use crate::domain::auth::_users::data::user::User;
         use crate::domain::media_read::service::{
-            media_read_upload_handler, media_read_upload_limit_bytes,
+            media_read_start_handler, media_read_upload_handler, media_read_upload_limit_bytes,
+            new_progress_store, progress_get_handler,
         };
         use crate::domain::media_write::service::{
             media_write_artifact_download_handler, media_write_compress_handler,
@@ -67,12 +68,24 @@ fn main() {
                 .await
                 .expect("Failed to create session store");
 
+        let progress_store = new_progress_store();
+
         Ok(dioxus::server::router(App)
             .route(
                 "/api/media-read/upload",
                 post(media_read_upload_handler).layer(axum::extract::DefaultBodyLimit::max(
                     media_read_upload_limit_bytes(),
                 )),
+            )
+            .route(
+                "/api/media-read/start",
+                post(media_read_start_handler).layer(axum::extract::DefaultBodyLimit::max(
+                    media_read_upload_limit_bytes(),
+                )),
+            )
+            .route(
+                "/api/media-read/progress/:trace_id",
+                get(progress_get_handler),
             )
             .route(
                 "/api/media-write/compress",
@@ -91,6 +104,7 @@ fn main() {
                 get(media_write_artifact_download_handler),
             )
             .route("/api/errors/client", post(client_error_handler))
+            .layer(Extension(progress_store))
             .layer(Extension(pool.clone()))
             .layer(
                 AuthSessionLayer::<User, Uuid, SessionPgPool, PgPool>::new(Some(pool))
