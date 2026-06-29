@@ -60,12 +60,16 @@ pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticRe
         checks.push(check_audio_bit_depth(&a.bits_per_sample, profile));
         checks.push(check_default_audio_stream(a));
     }
+    checks.push(check_audio_language_tags(&audio));
 
     checks.push(check_subtitles(report.subtitle_count));
     checks.push(check_subtitle_codecs(&subtitles));
+    checks.push(check_subtitle_language_tags(&subtitles));
     checks.push(check_forced_subtitles(&subtitles));
     checks.push(check_extension(&report.file_name, &report.format_name));
     checks.push(check_encoder_tag(&report.format_tags));
+    checks.push(check_creation_time_tag(&report.format_tags));
+    checks.push(check_timecode_tag(report, &video, profile));
 
     if let (Some(vs), Some(a)) = (video.first(), audio.first()) {
         checks.push(check_av_sync(&vs.start_time, &a.start_time));
@@ -374,6 +378,27 @@ fn check_default_audio_stream(stream: &MediaStreamInfo) -> DiagnosticCheck {
     }
 }
 
+fn check_audio_language_tags(audio: &[&MediaStreamInfo]) -> DiagnosticCheck {
+    let label = "Audio language tags";
+    if audio.is_empty() {
+        return pass(label, "No audio stream to validate");
+    }
+
+    let missing = audio
+        .iter()
+        .filter(|stream| tag_value(&stream.tags, "language").unwrap_or_default().trim().is_empty())
+        .count();
+
+    if missing == 0 {
+        pass(label, "All audio streams have language tags")
+    } else {
+        warn(
+            label,
+            format!("{missing} audio stream(s) missing language metadata"),
+        )
+    }
+}
+
 fn check_subtitles(subtitle_count: usize) -> DiagnosticCheck {
     let label = "Subtitles";
     if subtitle_count > 0 {
@@ -382,6 +407,27 @@ fn check_subtitles(subtitle_count: usize) -> DiagnosticCheck {
         warn(
             label,
             "No embedded subtitles — check if sidecar .srt needed",
+        )
+    }
+}
+
+fn check_subtitle_language_tags(subtitles: &[&MediaStreamInfo]) -> DiagnosticCheck {
+    let label = "Subtitle language tags";
+    if subtitles.is_empty() {
+        return pass(label, "No subtitle stream to validate");
+    }
+
+    let missing = subtitles
+        .iter()
+        .filter(|stream| tag_value(&stream.tags, "language").unwrap_or_default().trim().is_empty())
+        .count();
+
+    if missing == 0 {
+        pass(label, "All subtitle streams have language tags")
+    } else {
+        warn(
+            label,
+            format!("{missing} subtitle stream(s) missing language metadata"),
         )
     }
 }
@@ -655,6 +701,34 @@ fn check_encoder_tag(format_tags: &[MediaKeyValue]) -> DiagnosticCheck {
     }
 }
 
+fn check_creation_time_tag(format_tags: &[MediaKeyValue]) -> DiagnosticCheck {
+    let label = "Creation time";
+    match tag_value(format_tags, "creation_time") {
+        Some(value) if !value.is_empty() => pass(label, format!("Tagged: {value}")),
+        _ => warn(label, "No creation_time tag found"),
+    }
+}
+
+fn check_timecode_tag(
+    report: &MediaProbeReport,
+    video: &[&MediaStreamInfo],
+    profile: &PlatformProfile,
+) -> DiagnosticCheck {
+    let label = "Timecode";
+    let format_timecode = tag_value(&report.format_tags, "timecode");
+    let stream_timecode = video.iter().find_map(|stream| tag_value(&stream.tags, "timecode"));
+    let value = format_timecode.or(stream_timecode).unwrap_or_default();
+
+    if !value.is_empty() {
+        return pass(label, format!("Timecode present: {value}"));
+    }
+
+    match profile {
+        PlatformProfile::Broadcast => warn(label, "No timecode tag found for broadcast profile"),
+        _ => pass(label, "No explicit timecode tag — acceptable for web/mobile"),
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -854,5 +928,39 @@ mod tests {
             .find(|c| c.label == "Subtitle codec")
             .unwrap();
         assert!(matches!(codec.status, DiagnosticStatus::Warn));
+    }
+
+    #[test]
+    fn missing_audio_language_is_warn() {
+        let diag = run(&make_report(), &PlatformProfile::Web);
+        let check = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Audio language tags")
+            .unwrap();
+        assert!(matches!(check.status, DiagnosticStatus::Warn));
+    }
+
+    #[test]
+    fn timecode_missing_is_warn_for_broadcast() {
+        let diag = run(&make_report(), &PlatformProfile::Broadcast);
+        let check = diag.checks.iter().find(|c| c.label == "Timecode").unwrap();
+        assert!(matches!(check.status, DiagnosticStatus::Warn));
+    }
+
+    #[test]
+    fn creation_time_present_is_pass() {
+        let mut report = make_report();
+        report.format_tags.push(MediaKeyValue {
+            key: "creation_time".into(),
+            value: "2026-06-29T10:00:00Z".into(),
+        });
+        let diag = run(&report, &PlatformProfile::Web);
+        let check = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Creation time")
+            .unwrap();
+        assert!(matches!(check.status, DiagnosticStatus::Pass));
     }
 }

@@ -58,7 +58,8 @@
 | ✅ | **Closed captions check** | 🟢 Low | ✅ Done | Detects embedded CEA-608/708 caption flags from ffprobe stream data |
 | ✅ | **Forced subtitles check** | 🟢 Low | ✅ Done | Detects subtitle streams flagged as `forced` |
 | ✅ | **Subtitle codec validation** | 🟢 Low | ✅ Done | Validates subtitle stream codecs like `mov_text`, `srt`, `webvtt`, warns on sensitive codecs |
-| ⬜ | **Raw inspector polish** | 🟡 Medium | 🔴 High | Improve readability of raw stream / tags / chapters / side data in diagnostic UI |
+| ✅ | **Metadata tag checks** | 🟡 Medium | ✅ Done | Checks audio/subtitle language tags, creation time, and timecode presence by profile |
+| 🟡 | **Raw inspector polish** | 🟡 Medium | 🔴 High | Improve readability of raw stream / tags / chapters / side data in diagnostic UI |
 | ⬜ | **NLE metadata comparison** | 🟠 High | 🔴 High | Compare DaVinci / Premiere / FCPX exports to spot metadata differences |
 | ⬜ | **Waveform** | 🟢 Low | 🟡 Medium | Audio file → waveform image to support visual inspection in diagnostic flow |
 | ⬜ | **Scene detection** | 🟡 Medium | 🟡 Medium | Detect cuts / scene changes to support deeper content inspection |
