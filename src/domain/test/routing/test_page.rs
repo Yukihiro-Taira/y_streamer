@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 use crate::components::demos::demo_dropzone::DemoDropzone;
 use crate::components::demos::demo_dropzone_grid::DemoDropzoneGrid;
+use crate::components::demos::demo_dropzone_toggle::DemoDropzoneToggle;
 use crate::components::demos::demo_video_inspector::DemoVideoInspector;
 use crate::domain::media_read::routing::media_read_page::MediaReadPage;
 
@@ -13,6 +14,7 @@ pub fn TestPage() -> Element {
             DemoVideoInspector {}
             DemoDropzone {}
             DemoDropzoneGrid {}
+            DemoDropzoneToggle {}
         }
     }
 }
