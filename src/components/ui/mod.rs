@@ -7,4 +7,5 @@ pub mod dropzone;
 pub mod input;
 pub mod label;
 pub mod separator;
+pub mod theme_toggle;
 pub mod toolbar;

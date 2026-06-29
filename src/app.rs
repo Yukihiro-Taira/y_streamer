@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use icons::PanelLeft;
 
 use crate::components::sidenav::Sidenav;
+use crate::components::ui::theme_toggle::ThemeToggle;
 use crate::domain::auth::_users::service::get_user::get_user;
 use crate::domain::auth::routing::access_demo_page::AccessDemoPage;
 use crate::domain::auth::routing::dashboard_page::DashboardOverview;
@@ -110,6 +111,9 @@ fn DashboardShell() -> Element {
                             }
                             div { class: "h-4 w-px bg-border" }
                             span { class: "text-sm font-medium", "{page_title}" }
+                            div { class: "ml-auto",
+                                ThemeToggle {}
+                            }
                         }
                         // ── Page content ──────────────────────────────────
                         div { class: "flex flex-col flex-1 gap-4 p-4 pt-0 overflow-auto",
