@@ -52,10 +52,10 @@
 
 | Status | Feature | Description |
 |---|---|---|
-| ⬜ | **Dropzone click-to-browse** | Click area → native file picker |
-| ⬜ | **Dropzone append files** | Drop adds to list, doesn't replace |
-| ⬜ | **Dropzone validation** | `max_files`, `max_size_mb`, `accept` mime types |
-| ⬜ | **Dropzone list/grid toggle** | Switch between row list and card grid |
+| ✅ | **Dropzone click-to-browse** | Click area → native file picker |
+| ✅ | **Dropzone append files** | Drop adds to list, doesn't replace |
+| ✅ | **Dropzone validation** | `max_files`, `max_size_mb`, `accept` mime types |
+| ✅ | **Dropzone list/grid toggle** | Switch between row list and card grid |
 | ⬜ | **Job progress bar UI** | Visual progress tied to `media_write` jobs |
 | ⬜ | **Video player** | In-app playback of uploaded / processed files |
 | ✅ | **Dark mode** | Toggle in navbar top-right, localStorage persistence |
