@@ -32,10 +32,52 @@ pub struct DropzoneCtx {
     pub files: Signal<Vec<DropzoneFile>>,
 }
 
+// ── WASM helper ───────────────────────────────────────────────────────────────
+
+#[cfg(target_arch = "wasm32")]
+fn collect_files(
+    file_list: &web_sys::FileList,
+    max_size_mb: Option<f64>,
+    accept: &Option<Vec<String>>,
+) -> Vec<DropzoneFile> {
+    let mut out = Vec::new();
+    for i in 0..file_list.length() {
+        let Some(f) = file_list.item(i) else { continue };
+        let mime = f.type_();
+        if let Some(types) = accept {
+            if !types.iter().any(|t| mime.starts_with(t.as_str())) {
+                continue;
+            }
+        }
+        if let Some(max) = max_size_mb {
+            if f.size() as f64 > max * 1_048_576.0 {
+                continue;
+            }
+        }
+        let preview_url = if mime.starts_with("image/") || mime.starts_with("video/") {
+            web_sys::Url::create_object_url_with_blob(&f).ok()
+        } else {
+            None
+        };
+        out.push(DropzoneFile {
+            name: f.name(),
+            size_bytes: f.size() as u64,
+            mime_type: mime,
+            preview_url,
+        });
+    }
+    out
+}
+
 // ── Dropzone (root) ───────────────────────────────────────────────────────────
 
 #[component]
-pub fn Dropzone(children: Element) -> Element {
+pub fn Dropzone(
+    children: Element,
+    #[props(optional)] max_files: Option<usize>,
+    #[props(optional)] max_size_mb: Option<f64>,
+    #[props(optional)] accept: Option<Vec<String>>,
+) -> Element {
     let mut files = use_signal(Vec::<DropzoneFile>::new);
     let mut is_dragging = use_signal(|| false);
 
@@ -66,7 +108,6 @@ pub fn Dropzone(children: Element) -> Element {
                 .ok();
             on_dragover.forget();
 
-            // dragenter / dragleave / drop scoped to this element
             let on_dragenter: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
@@ -98,6 +139,7 @@ pub fn Dropzone(children: Element) -> Element {
             on_dragleave.forget();
 
             let el3 = el.clone();
+            let accept_drop = accept.clone();
             let on_drop: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
@@ -108,25 +150,12 @@ pub fn Dropzone(children: Element) -> Element {
                     let Some(dt) = e.data_transfer() else { return };
                     let Some(file_list) = dt.files() else { return };
 
-                    let mut dropped = Vec::new();
-                    for i in 0..file_list.length() {
-                        if let Some(f) = file_list.item(i) {
-                            let mime = f.type_();
-                            let preview_url =
-                                if mime.starts_with("image/") || mime.starts_with("video/") {
-                                    web_sys::Url::create_object_url_with_blob(&f).ok()
-                                } else {
-                                    None
-                                };
-                            dropped.push(DropzoneFile {
-                                name: f.name(),
-                                size_bytes: f.size() as u64,
-                                mime_type: mime,
-                                preview_url,
-                            });
-                        }
-                    }
-                    files.set(dropped);
+                    let new_files = collect_files(&file_list, max_size_mb, &accept_drop);
+                    let mut w = files.write();
+                    let remaining = max_files
+                        .map(|m| m.saturating_sub(w.len()))
+                        .unwrap_or(usize::MAX);
+                    w.extend(new_files.into_iter().take(remaining));
                 });
             el3.add_event_listener_with_callback("drop", on_drop.as_ref().unchecked_ref())
                 .ok();
@@ -292,7 +321,6 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
         div { class: "{merged}",
             for (idx, file) in files.iter().enumerate() {
                 div { class: "flex items-center gap-3 py-3",
-                    // Thumbnail or file icon
                     if let Some(url) = &file.preview_url {
                         if file.mime_type.starts_with("video/") {
                             video {
@@ -316,12 +344,10 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
                             }
                         }
                     }
-                    // Name + size
                     div { class: "flex flex-col flex-1 min-w-0",
                         span { class: "text-sm font-medium truncate", "{file.name}" }
                         span { class: "text-xs text-muted-foreground", "{file.size_display()}" }
                     }
-                    // Remove
                     button {
                         class: "shrink-0 size-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-base leading-none",
                         onclick: move |_| {
@@ -353,7 +379,6 @@ pub fn DropzoneFileGrid(#[props(into, optional)] class: Option<String>) -> Eleme
         div { class: "{merged}",
             for (idx, file) in files.iter().enumerate() {
                 div { class: "relative group w-32 h-32 rounded-xl overflow-hidden bg-muted shrink-0",
-                    // Media preview or icon fill
                     if let Some(url) = &file.preview_url {
                         if file.mime_type.starts_with("video/") {
                             video {
@@ -379,12 +404,10 @@ pub fn DropzoneFileGrid(#[props(into, optional)] class: Option<String>) -> Eleme
                             }
                         }
                     }
-                    // Hover overlay — name + size
                     div { class: "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent pt-6 pb-2 px-2 translate-y-full group-hover:translate-y-0 transition-transform duration-200",
                         p { class: "text-xs font-medium text-white truncate", "{file.name}" }
                         p { class: "text-[10px] text-white/70", "{file.size_display()}" }
                     }
-                    // Remove button
                     button {
                         class: "absolute top-1.5 right-1.5 size-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-200 leading-none",
                         onclick: move |_| {
