@@ -1,6 +1,14 @@
 use dioxus::prelude::*;
-use icons::{FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText};
+use icons::{FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, LayoutGrid, LayoutList};
 use tw_merge::tw_merge;
+
+// ── ViewMode ──────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum ViewMode {
+    List,
+    Grid,
+}
 
 // ── File type ─────────────────────────────────────────────────────────────────
 
@@ -30,6 +38,7 @@ impl DropzoneFile {
 pub struct DropzoneCtx {
     pub is_dragging: Signal<bool>,
     pub files: Signal<Vec<DropzoneFile>>,
+    pub view: Signal<ViewMode>,
 }
 
 // ── WASM helper ───────────────────────────────────────────────────────────────
@@ -80,8 +89,9 @@ pub fn Dropzone(
 ) -> Element {
     let mut files = use_signal(Vec::<DropzoneFile>::new);
     let mut is_dragging = use_signal(|| false);
+    let view = use_signal(|| ViewMode::List);
 
-    use_context_provider(|| DropzoneCtx { files, is_dragging });
+    use_context_provider(|| DropzoneCtx { files, is_dragging, view });
 
     #[cfg(not(target_arch = "wasm32"))]
     return rsx! { div { {children} } };
@@ -357,6 +367,43 @@ pub fn DropzoneFileList(#[props(into, optional)] class: Option<String>) -> Eleme
                         "×"
                     }
                 }
+            }
+        }
+    }
+}
+
+// ── DropzoneViewToggle ────────────────────────────────────────────────────────
+
+#[component]
+pub fn DropzoneViewToggle(#[props(into, optional)] class: Option<String>) -> Element {
+    let mut ctx = use_context::<DropzoneCtx>();
+    let view = *ctx.view.read();
+
+    let btn = |active: bool| {
+        if active {
+            "inline-flex items-center justify-center size-7 rounded-md bg-accent text-foreground transition-colors"
+        } else {
+            "inline-flex items-center justify-center size-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        }
+    };
+
+    let merged = tw_merge!("flex items-center gap-0.5", class.as_deref().unwrap_or(""));
+
+    rsx! {
+        div { class: "{merged}",
+            button {
+                r#type: "button",
+                "aria-label": "List view",
+                class: "{btn(view == ViewMode::List)}",
+                onclick: move |_| ctx.view.set(ViewMode::List),
+                LayoutList { class: "size-4" }
+            }
+            button {
+                r#type: "button",
+                "aria-label": "Grid view",
+                class: "{btn(view == ViewMode::Grid)}",
+                onclick: move |_| ctx.view.set(ViewMode::Grid),
+                LayoutGrid { class: "size-4" }
             }
         }
     }
