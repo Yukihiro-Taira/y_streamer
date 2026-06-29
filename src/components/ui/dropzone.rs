@@ -107,6 +107,7 @@ pub fn Dropzone(
     {
         let mut drag_count = use_signal(|| 0u32);
 
+        let accept_for_root = accept.clone();
         let on_mounted = move |event: dioxus::prelude::MountedEvent| {
             use wasm_bindgen::JsCast;
             use wasm_bindgen::closure::Closure;
@@ -156,7 +157,7 @@ pub fn Dropzone(
             on_dragleave.forget();
 
             let el3 = el.clone();
-            let accept_drop = accept.clone();
+            let accept_drop = accept_for_root.clone();
             let on_drop: Closure<dyn FnMut(web_sys::DragEvent)> =
                 Closure::new(move |e: web_sys::DragEvent| {
                     e.prevent_default();
