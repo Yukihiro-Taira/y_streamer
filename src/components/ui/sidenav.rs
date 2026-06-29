@@ -16,86 +16,111 @@ impl SidenavCtx {
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
+// Renders a wrapper div that owns --sidenav-width CSS var + data-min/max-width.
+// All children share the SidenavCtx via context.
 
 #[component]
 pub fn SidenavProvider(
     #[props(default = true)] default_open: bool,
+    #[props(default = 160)] min_width: u32,
+    #[props(default = 480)] max_width: u32,
     children: Element,
 ) -> Element {
     let open = use_signal(|| default_open);
     use_context_provider(|| SidenavCtx { open });
 
-    rsx! { {children} }
+    rsx! {
+        div {
+            "data-sidenav-wrapper": true,
+            "data-min-width": "{min_width}",
+            "data-max-width": "{max_width}",
+            style: "--sidenav-width: 256px",
+            class: "flex h-full w-full",
+            {children}
+        }
+    }
 }
 
 // ── Sidenav ───────────────────────────────────────────────────────────────────
+// Width driven by --sidenav-width CSS var (set on SidenavProvider wrapper).
+// Collapsed → fixed 64px override. SidenavResizeHandle handles drag + localStorage.
 
 #[component]
-pub fn Sidenav(
-    #[props(default = 160)] min_width: u32,
-    #[props(default = 480)] max_width: u32,
-    children: Element,
-) -> Element {
+pub fn Sidenav(children: Element) -> Element {
     let ctx = use_context::<SidenavCtx>();
     let open = (ctx.open)();
 
     let aside_style = if open {
-        format!("min-width:{min_width}px; max-width:{max_width}px; width:256px")
+        "width: var(--sidenav-width)"
     } else {
-        "width:64px".to_string()
+        "width: 64px"
     };
-
-    use_effect(move || {
-        if open {
-            eval(&format!(
-                r#"(function(){{
-                    const el = document.querySelector('[data-sidenav]');
-                    if (!el) return;
-                    const h = el.querySelector('[data-sidenav-handle]');
-                    if (!h || h.dataset.initialized) return;
-                    h.dataset.initialized = '1';
-
-                    const saved = localStorage.getItem('sidenav-width');
-                    if (saved) el.style.width = saved + 'px';
-
-                    h.addEventListener('mousedown', function(e) {{
-                        e.preventDefault();
-                        document.body.style.userSelect = 'none';
-                        const x0 = e.clientX;
-                        const w0 = el.getBoundingClientRect().width;
-                        const mn = parseInt(el.dataset.minWidth);
-                        const mx = parseInt(el.dataset.maxWidth);
-                        function move(e) {{
-                            el.style.width = Math.max(mn, Math.min(mx, w0 + e.clientX - x0)) + 'px';
-                        }}
-                        function up() {{
-                            document.body.style.userSelect = '';
-                            localStorage.setItem('sidenav-width', el.getBoundingClientRect().width);
-                            document.removeEventListener('mousemove', move);
-                            document.removeEventListener('mouseup', up);
-                        }}
-                        document.addEventListener('mousemove', move);
-                        document.addEventListener('mouseup', up);
-                    }});
-                }})();"#
-            ));
-        }
-    });
 
     rsx! {
         aside {
             class: "relative flex flex-col h-screen border-r bg-sidenav text-sidenav-foreground shrink-0 sticky top-0 overflow-hidden transition-[width] duration-200",
             style: "{aside_style}",
-            "data-sidenav": true,
-            "data-min-width": "{min_width}",
-            "data-max-width": "{max_width}",
             {children}
-            if open {
-                div {
-                    class: "absolute top-0 right-0 w-1 h-full z-50 cursor-col-resize hover:bg-border transition-colors",
-                    "data-sidenav-handle": true,
+        }
+    }
+}
+
+// ── Resize handle ─────────────────────────────────────────────────────────────
+// Place inside Sidenav on the trailing edge.
+// Finds nearest [data-sidenav-wrapper], reads data-min/max-width for clamping,
+// updates --sidenav-width CSS var, persists to localStorage.
+
+#[component]
+pub fn SidenavResizeHandle(#[props(default = "".to_string())] class: String) -> Element {
+    use_effect(move || {
+        eval(r#"(function() {
+            const h = document.querySelector('[data-sidenav-resize-handle]');
+            if (!h || h.dataset.initialized) return;
+            h.dataset.initialized = '1';
+
+            const wrapper = h.closest('[data-sidenav-wrapper]');
+            if (!wrapper) return;
+
+            const saved = localStorage.getItem('sidenav-width');
+            if (saved) wrapper.style.setProperty('--sidenav-width', saved + 'px');
+
+            h.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                document.body.style.userSelect = 'none';
+                const aside = wrapper.querySelector('aside');
+                const x0 = e.clientX;
+                const w0 = aside ? aside.getBoundingClientRect().width : 256;
+                const mn = parseInt(wrapper.dataset.minWidth) || 160;
+                const mx = parseInt(wrapper.dataset.maxWidth) || 480;
+
+                function move(e) {
+                    const w = Math.max(mn, Math.min(mx, w0 + e.clientX - x0));
+                    wrapper.style.setProperty('--sidenav-width', w + 'px');
                 }
-            }
+                function up() {
+                    document.body.style.userSelect = '';
+                    const aside = wrapper.querySelector('aside');
+                    if (aside) localStorage.setItem('sidenav-width', aside.getBoundingClientRect().width);
+                    document.removeEventListener('mousemove', move);
+                    document.removeEventListener('mouseup', up);
+                }
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', up);
+            });
+        })();"#);
+    });
+
+    let ctx = use_context::<SidenavCtx>();
+    let open = (ctx.open)();
+
+    if !open {
+        return rsx! {};
+    }
+
+    rsx! {
+        div {
+            "data-sidenav-resize-handle": true,
+            class: "absolute top-0 right-0 w-1 h-full z-50 cursor-col-resize hover:bg-border transition-colors {class}",
         }
     }
 }
@@ -180,7 +205,6 @@ pub fn SidenavMenuButton(
     } else {
         "text-muted-foreground hover:text-foreground hover:bg-accent"
     };
-
     rsx! {
         button {
             r#type: "button",

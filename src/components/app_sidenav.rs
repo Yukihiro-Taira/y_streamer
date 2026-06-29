@@ -6,8 +6,8 @@ use icons::{
 
 use crate::app::Route;
 use crate::components::ui::sidenav::{
-    SidenavContent, SidenavCtx, SidenavFooter, SidenavGroupLabel, SidenavHeader, SidenavMenu,
-    SidenavMenuItem, Sidenav,
+    Sidenav, SidenavContent, SidenavCtx, SidenavFooter, SidenavGroupLabel, SidenavHeader,
+    SidenavMenu, SidenavMenuItem, SidenavResizeHandle,
 };
 use crate::domain::auth::_users::data::user::User;
 use crate::domain::auth::_users::role::Role;
@@ -125,6 +125,8 @@ pub fn AppSidenav(user: User) -> Element {
             SidenavFooter {
                 NavUser { user, open, initials, role_label }
             }
+
+            SidenavResizeHandle {}
         }
     }
 }
