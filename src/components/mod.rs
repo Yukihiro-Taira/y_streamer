@@ -1,5 +1,5 @@
 pub mod demos;
 pub mod hooks;
-pub mod sidenav;
+pub mod app_sidenav;
 pub mod ui;
 pub mod workflow;

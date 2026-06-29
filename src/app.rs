@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
-use icons::PanelLeft;
 
-use crate::components::sidenav::Sidenav;
+use crate::components::app_sidenav::AppSidenav;
+use crate::components::ui::sidenav::{SidenavProvider, SidenavTrigger};
 use crate::components::ui::theme_toggle::ThemeToggle;
 use crate::domain::auth::_users::service::get_user::get_user;
 use crate::domain::auth::routing::access_demo_page::AccessDemoPage;
@@ -78,7 +78,6 @@ pub fn App() -> Element {
 fn DashboardShell() -> Element {
     let nav = use_navigator();
     let auth = use_resource(get_user);
-    let mut sidebar_open = use_signal(|| true);
     let route = use_route::<Route>();
 
     let page_title = match route {
@@ -99,25 +98,23 @@ fn DashboardShell() -> Element {
         Some(Ok(Some(user))) => {
             let user = user.clone();
             rsx! {
-                div { class: "flex h-screen overflow-hidden",
-                    Sidenav { user: user.clone(), open: sidebar_open() }
-                    div { class: "flex-1 overflow-auto flex flex-col min-w-0",
-                        // ── Header ────────────────────────────────────────
-                        div { class: "h-16 flex shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear",
-                            button {
-                                class: "-ml-1 size-7 inline-flex items-center justify-center rounded-md hover:bg-accent transition-colors",
-                                onclick: move |_| sidebar_open.set(!sidebar_open()),
-                                PanelLeft { class: "size-4" }
+                SidenavProvider {
+                    div { class: "flex h-screen overflow-hidden",
+                        AppSidenav { user: user.clone() }
+                        div { class: "flex-1 overflow-auto flex flex-col min-w-0",
+                            // ── Header ────────────────────────────────────────
+                            div { class: "h-16 flex shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear",
+                                SidenavTrigger { class: "-ml-1" }
+                                div { class: "h-4 w-px bg-border" }
+                                span { class: "text-sm font-medium", "{page_title}" }
+                                div { class: "ml-auto",
+                                    ThemeToggle {}
+                                }
                             }
-                            div { class: "h-4 w-px bg-border" }
-                            span { class: "text-sm font-medium", "{page_title}" }
-                            div { class: "ml-auto",
-                                ThemeToggle {}
+                            // ── Page content ──────────────────────────────────
+                            div { class: "flex flex-col flex-1 gap-4 p-4 pt-0 overflow-auto",
+                                Outlet::<Route> {}
                             }
-                        }
-                        // ── Page content ──────────────────────────────────
-                        div { class: "flex flex-col flex-1 gap-4 p-4 pt-0 overflow-auto",
-                            Outlet::<Route> {}
                         }
                     }
                 }
