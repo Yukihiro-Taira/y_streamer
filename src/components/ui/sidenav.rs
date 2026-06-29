@@ -34,7 +34,7 @@ pub fn SidenavProvider(
             "data-sidenav-wrapper": true,
             "data-min-width": "{min_width}",
             "data-max-width": "{max_width}",
-            style: "--sidenav-width: 256px",
+            style: "--sidenav-width: 200px",
             class: "flex h-full w-full",
             {children}
         }
