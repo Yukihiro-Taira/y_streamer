@@ -80,6 +80,8 @@ pub(crate) fn map_ffprobe_report(
         raw_json_pretty,
         thumbnails: vec![],
         subtitles: vec![],
+        waveform_image: String::new(),
+        scene_cuts: vec![],
         mediainfo: None,
         mediainfo_error: None,
         loudness: None,

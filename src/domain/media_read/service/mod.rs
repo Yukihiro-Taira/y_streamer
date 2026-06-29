@@ -5,8 +5,10 @@ mod loudness_runner;
 mod mediainfo_runner;
 pub mod progress_store;
 mod runtime_config;
+mod scene_detector;
 mod subtitle_extractor;
 mod thumbnail_generator;
+mod waveform_generator;
 
 #[cfg(feature = "server")]
 pub use inspect_media_upload::{

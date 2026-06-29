@@ -59,10 +59,11 @@
 | ✅ | **Forced subtitles check** | 🟢 Low | ✅ Done | Detects subtitle streams flagged as `forced` |
 | ✅ | **Subtitle codec validation** | 🟢 Low | ✅ Done | Validates subtitle stream codecs like `mov_text`, `srt`, `webvtt`, warns on sensitive codecs |
 | ✅ | **Metadata tag checks** | 🟡 Medium | ✅ Done | Checks audio/subtitle language tags, creation time, and timecode presence by profile |
+| ✅ | **Comparison mode v1** | 🟡 Medium | ✅ Done | Optional File B compare with fixed field diffs for container, codecs, resolution, timecode, encoder, creation time |
 | 🟡 | **Raw inspector polish** | 🟡 Medium | 🔴 High | Improve readability of raw stream / tags / chapters / side data in diagnostic UI |
-| ⬜ | **NLE metadata comparison** | 🟠 High | 🔴 High | Compare DaVinci / Premiere / FCPX exports to spot metadata differences |
-| ⬜ | **Waveform** | 🟢 Low | 🟡 Medium | Audio file → waveform image to support visual inspection in diagnostic flow |
-| ⬜ | **Scene detection** | 🟡 Medium | 🟡 Medium | Detect cuts / scene changes to support deeper content inspection |
+| 🟡 | **NLE metadata comparison** | 🟠 High | 🔴 High | Compare DaVinci / Premiere / FCPX exports to spot metadata differences |
+| ✅ | **Waveform** | 🟢 Low | ✅ Done | Audio file → waveform image to support visual inspection in diagnostic flow |
+| ✅ | **Scene detection** | 🟡 Medium | ✅ Done | Detect cuts / scene changes to support deeper content inspection |
 
 ---
 

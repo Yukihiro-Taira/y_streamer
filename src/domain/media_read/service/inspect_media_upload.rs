@@ -20,9 +20,13 @@ use crate::domain::media_read::service::progress_store::ProgressStore;
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::runtime_config::MediaReadRuntimeConfig;
 #[cfg(feature = "server")]
+use crate::domain::media_read::service::scene_detector::detect_scenes;
+#[cfg(feature = "server")]
 use crate::domain::media_read::service::subtitle_extractor::extract_subtitles;
 #[cfg(feature = "server")]
 use crate::domain::media_read::service::thumbnail_generator::generate_thumbnails;
+#[cfg(feature = "server")]
+use crate::domain::media_read::service::waveform_generator::generate_waveform;
 #[cfg(feature = "server")]
 use crate::domain::observability::error_reporter::report_server_error;
 
@@ -177,7 +181,7 @@ pub async fn media_read_upload_handler(
                 }
             };
 
-            // Run thumbnails, subtitles, mediainfo, loudness in parallel
+            // Run thumbnails, subtitles, waveform, scenes, mediainfo, loudness in parallel
             let duration_secs: f64 = report
                 .duration
                 .split_whitespace()
@@ -188,7 +192,7 @@ pub async fn media_read_upload_handler(
             let has_audio = report.audio_count > 0;
             let streams_clone = report.streams.clone();
 
-            let (thumbnails, subtitles, mediainfo, loudness) = tokio::join!(
+            let (thumbnails, subtitles, waveform_image, scene_cuts, mediainfo, loudness) = tokio::join!(
                 async {
                     if has_video {
                         generate_thumbnails(
@@ -217,6 +221,21 @@ pub async fn media_read_upload_handler(
                         vec![]
                     }
                 },
+                async {
+                    if has_audio {
+                        generate_waveform(&config.ffmpeg_bin, &temp_path, &trace_id, &config.temp_dir)
+                            .await
+                    } else {
+                        String::new()
+                    }
+                },
+                async {
+                    if has_video {
+                        detect_scenes(&config.ffmpeg_bin, &temp_path).await.unwrap_or_default()
+                    } else {
+                        vec![]
+                    }
+                },
                 run_mediainfo(&config.mediainfo_bin, &temp_path),
                 async {
                     if has_audio {
@@ -229,6 +248,8 @@ pub async fn media_read_upload_handler(
 
             report.thumbnails = thumbnails;
             report.subtitles = subtitles;
+            report.waveform_image = waveform_image;
+            report.scene_cuts = scene_cuts;
             match mediainfo {
                 Ok(r) => report.mediainfo = Some(r),
                 Err(e) => report.mediainfo_error = Some(e),
@@ -585,6 +606,8 @@ async fn run_background_inspection(
                 mediainfo_done: false,
                 loudness_done: false,
                 thumbnails_done: false,
+                waveform_done: false,
+                scenes_done: false,
                 subtitles_done: false,
             };
         }
@@ -618,12 +641,16 @@ async fn run_background_inspection(
     let store_m = store.clone();
     let store_s = store.clone();
     let store_l = store.clone();
+    let store_w = store.clone();
+    let store_c = store.clone();
     let trace_t = trace_id.clone();
     let trace_m = trace_id.clone();
     let trace_s = trace_id.clone();
     let trace_l = trace_id.clone();
+    let trace_w = trace_id.clone();
+    let trace_c = trace_id.clone();
 
-    let (thumbnails, subtitles, mediainfo, loudness) = tokio::join!(
+    let (thumbnails, subtitles, waveform_image, scene_cuts, mediainfo, loudness) = tokio::join!(
         async {
             let r = if has_video {
                 generate_thumbnails(
@@ -657,6 +684,24 @@ async fn run_background_inspection(
             r
         },
         async {
+            let r = if has_audio {
+                generate_waveform(&config.ffmpeg_bin, &temp_path, &trace_id, &config.temp_dir).await
+            } else {
+                String::new()
+            };
+            mark_done!(store_w, &trace_w, started_at, waveform_done);
+            r
+        },
+        async {
+            let r = if has_video {
+                detect_scenes(&config.ffmpeg_bin, &temp_path).await.unwrap_or_default()
+            } else {
+                vec![]
+            };
+            mark_done!(store_c, &trace_c, started_at, scenes_done);
+            r
+        },
+        async {
             let r = run_mediainfo(&config.mediainfo_bin, &temp_path).await;
             mark_done!(store_m, &trace_m, started_at, mediainfo_done);
             r
@@ -674,6 +719,8 @@ async fn run_background_inspection(
 
     report.thumbnails = thumbnails;
     report.subtitles = subtitles;
+    report.waveform_image = waveform_image;
+    report.scene_cuts = scene_cuts;
     match mediainfo {
         Ok(r) => report.mediainfo = Some(r),
         Err(e) => report.mediainfo_error = Some(e),

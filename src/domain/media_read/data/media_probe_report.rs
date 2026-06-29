@@ -30,6 +30,10 @@ pub struct MediaProbeReport {
     pub thumbnails: Vec<String>,
     /// Extracted subtitle streams, empty if none found
     pub subtitles: Vec<MediaSubtitle>,
+    /// PNG waveform preview as data URL, empty if no audio or generation failed
+    pub waveform_image: String,
+    /// Scene cut timestamps detected from the video track
+    pub scene_cuts: Vec<MediaSceneCut>,
     /// mediainfo report, None if not installed or failed (see mediainfo_error)
     pub mediainfo: Option<MediaInfoReport>,
     /// set when mediainfo is None due to an error ("not installed", etc.)
@@ -45,6 +49,12 @@ pub struct MediaSubtitle {
     pub stream_index: usize,
     pub language: String,
     pub content: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct MediaSceneCut {
+    pub timestamp_secs: f64,
+    pub score: String,
 }
 
 #[cfg_attr(not(any(feature = "server", target_arch = "wasm32")), allow(dead_code))]

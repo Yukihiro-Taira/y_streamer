@@ -28,6 +28,8 @@ pub enum ProgressStage {
         mediainfo_done: bool,
         loudness_done: bool,
         thumbnails_done: bool,
+        waveform_done: bool,
+        scenes_done: bool,
         subtitles_done: bool,
     },
     Done {

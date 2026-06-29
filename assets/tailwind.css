@@ -51,6 +51,8 @@
     --color-purple-400: oklch(71.4% 0.203 305.504);
     --color-purple-500: oklch(62.7% 0.265 303.9);
     --color-purple-600: oklch(55.8% 0.288 302.321);
+    --color-slate-800: oklch(27.9% 0.041 260.031);
+    --color-slate-950: oklch(12.9% 0.042 264.695);
     --color-black: #000;
     --color-white: #fff;
     --spacing: 0.25rem;
@@ -498,6 +500,9 @@
   .h-\[1px\] {
     height: 1px;
   }
+  .h-fit {
+    height: fit-content;
+  }
   .h-full {
     height: 100%;
   }
@@ -629,6 +634,9 @@
   .grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .grid-cols-\[minmax\(120px\,1\.1fr\)_minmax\(0\,1fr\)_minmax\(0\,1fr\)_88px\] {
+    grid-template-columns: minmax(120px,1.1fr) minmax(0,1fr) minmax(0,1fr) 88px;
+  }
   .grid-rows-\[auto_auto\] {
     grid-template-rows: auto auto;
   }
@@ -652,6 +660,9 @@
   }
   .justify-center {
     justify-content: center;
+  }
+  .gap-0 {
+    gap: calc(var(--spacing) * 0);
   }
   .gap-0\.5 {
     gap: calc(var(--spacing) * 0.5);
@@ -881,6 +892,9 @@
   .border-red-400 {
     border-color: var(--color-red-400);
   }
+  .border-slate-800 {
+    border-color: var(--color-slate-800);
+  }
   .border-transparent {
     border-color: transparent;
   }
@@ -928,6 +942,9 @@
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--background) 90%, transparent);
     }
+  }
+  .bg-black {
+    background-color: var(--color-black);
   }
   .bg-black\/50 {
     background-color: color-mix(in srgb, #000 50%, transparent);
@@ -1028,8 +1045,14 @@
   .bg-sidenav {
     background-color: var(--sidenav);
   }
+  .bg-slate-950 {
+    background-color: var(--color-slate-950);
+  }
   .bg-transparent {
     background-color: transparent;
+  }
+  .bg-white {
+    background-color: var(--color-white);
   }
   .bg-yellow-50 {
     background-color: var(--color-yellow-50);
@@ -1054,6 +1077,9 @@
   .to-transparent {
     --tw-gradient-to: transparent;
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+  .object-contain {
+    object-fit: contain;
   }
   .object-cover {
     object-fit: cover;

@@ -5,6 +5,7 @@ use wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 
+use crate::components::diagnostic_compare_panel::ComparisonPanel;
 use crate::domain::diagnostic::data::diagnostic_report::{
     DiagnosticCheck, DiagnosticReport, DiagnosticStatus,
 };
@@ -14,7 +15,7 @@ use crate::domain::media_read::data::diagnostic_progress::{DiagnosticProgress, P
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
 use crate::domain::media_read::data::media_probe_report::{
-    LoudnessReport, MediaInfoReport, MediaKeyValue, MediaProbeReport, MediaStreamInfo,
+    LoudnessReport, MediaInfoReport, MediaProbeReport, MediaSceneCut, MediaStreamInfo,
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -26,11 +27,22 @@ pub fn DiagnosticPage() -> Element {
     let mut error = use_signal(|| None::<String>);
     let mut loading = use_signal(|| false);
     let mut drag_active = use_signal(|| false);
+    let mut compare_probe_report = use_signal(|| None::<MediaProbeReport>);
+    let mut compare_diagnostic = use_signal(|| None::<DiagnosticReport>);
+    let mut compare_error = use_signal(|| None::<String>);
+    let mut compare_loading = use_signal(|| false);
+    let mut compare_drag_active = use_signal(|| false);
     let mut profile = use_signal(|| PlatformProfile::Web);
     let mut progress = use_signal(|| None::<DiagnosticProgress>);
     let mut upload_progress = use_signal(|| None::<(u64, u64)>);
+    let mut compare_progress = use_signal(|| None::<DiagnosticProgress>);
+    let mut compare_upload_progress = use_signal(|| None::<(u64, u64)>);
+    let mut preview_url = use_signal(|| None::<String>);
+    let mut compare_preview_url = use_signal(|| None::<String>);
 
     let mut inspect = move |file: dioxus::html::FileData| {
+        revoke_browser_preview_url(preview_url());
+        preview_url.set(browser_preview_url(&file));
         error.set(None);
         probe_report.set(None);
         diagnostic.set(None);
@@ -94,11 +106,79 @@ pub fn DiagnosticPage() -> Element {
         });
     };
 
+    let mut inspect_compare = move |file: dioxus::html::FileData| {
+        revoke_browser_preview_url(compare_preview_url());
+        compare_preview_url.set(browser_preview_url(&file));
+        compare_error.set(None);
+        compare_probe_report.set(None);
+        compare_diagnostic.set(None);
+        compare_progress.set(None);
+        compare_upload_progress.set(None);
+        compare_loading.set(true);
+
+        spawn({
+            let current_profile = profile();
+            async move {
+                let trace_id = match start_upload(file, move |loaded, total| {
+                    compare_upload_progress.set(Some((loaded, total)));
+                })
+                .await
+                {
+                    Ok(t) => t,
+                    Err(e) => {
+                        compare_error.set(Some(e));
+                        compare_loading.set(false);
+                        return;
+                    }
+                };
+                compare_upload_progress.set(None);
+
+                #[cfg(target_arch = "wasm32")]
+                loop {
+                    sleep_ms(500).await;
+
+                    match poll_progress(&trace_id).await {
+                        Ok(p) => match p.stage.clone() {
+                            ProgressStage::Done { report } => {
+                                let diag = diagnostic_rules::run(&report, &current_profile);
+                                compare_diagnostic.set(Some(diag));
+                                compare_probe_report.set(Some(*report));
+                                compare_progress.set(None);
+                                compare_loading.set(false);
+                                break;
+                            }
+                            ProgressStage::Failed { message } => {
+                                compare_error.set(Some(message));
+                                compare_progress.set(None);
+                                compare_loading.set(false);
+                                break;
+                            }
+                            _ => {
+                                compare_progress.set(Some(p));
+                            }
+                        },
+                        Err(e) => {
+                            compare_error.set(Some(e));
+                            compare_loading.set(false);
+                            break;
+                        }
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                compare_loading.set(false);
+            }
+        });
+    };
+
     // Re-run rules when profile changes without re-uploading
     let mut rerun_diagnostic = move |_| {
         if let Some(r) = probe_report() {
             let diag = diagnostic_rules::run(&r, &profile());
             diagnostic.set(Some(diag));
+        }
+        if let Some(r) = compare_probe_report() {
+            let diag = diagnostic_rules::run(&r, &profile());
+            compare_diagnostic.set(Some(diag));
         }
     };
 
@@ -139,35 +219,67 @@ pub fn DiagnosticPage() -> Element {
                 }
             }
 
-            // ── Drop zone ────────────────────────────────────────────────
-            div {
-                class: if drag_active() {
-                    "rounded-2xl border-2 border-dashed border-primary bg-primary/5 px-6 py-10 text-center transition-colors cursor-pointer"
-                } else {
-                    "rounded-2xl border-2 border-dashed border-border bg-muted/20 px-6 py-10 text-center transition-colors cursor-pointer"
-                },
-                ondragover: move |evt| {
-                    evt.prevent_default();
-                    drag_active.set(true);
-                },
-                ondragleave: move |_| drag_active.set(false),
-                ondrop: move |evt: Event<DragData>| {
-                    evt.prevent_default();
-                    drag_active.set(false);
-                    if let Some(file) = evt.files().into_iter().next() {
-                        inspect(file);
-                    }
-                },
-                p { class: "text-sm font-medium", "Drop video file here" }
-                p { class: "mt-1 text-xs text-muted-foreground", "or choose one below" }
-                input {
-                    class: "mt-4 block w-full text-sm",
-                    r#type: "file",
-                    accept: "video/*,.mov,.mp4,.mkv,.mxf",
+            // ── Drop zones ───────────────────────────────────────────────
+            div { class: "grid gap-4 md:grid-cols-2",
+                UploadSlot {
+                    slot_label: "File A".to_string(),
+                    title: "Primary diagnostic".to_string(),
+                    subtitle: "Drop the main file to inspect.".to_string(),
+                    file_name: probe_report().as_ref().map(|report| report.file_name.clone()),
+                    clear_label: None,
+                    drag_active: drag_active(),
+                    ondragover: move |evt: Event<DragData>| {
+                        evt.prevent_default();
+                        drag_active.set(true);
+                    },
+                    ondragleave: move |_| drag_active.set(false),
+                    ondrop: move |evt: Event<DragData>| {
+                        evt.prevent_default();
+                        drag_active.set(false);
+                        if let Some(file) = evt.files().into_iter().next() {
+                            inspect(file);
+                        }
+                    },
                     onchange: move |evt: Event<FormData>| {
                         if let Some(file) = evt.files().into_iter().next() {
                             inspect(file);
                         }
+                    },
+                    onclear: None,
+                }
+                UploadSlot {
+                    slot_label: "File B".to_string(),
+                    title: "Optional comparison".to_string(),
+                    subtitle: "Drop a second file only if you want a side-by-side diff.".to_string(),
+                    file_name: compare_probe_report().as_ref().map(|report| report.file_name.clone()),
+                    clear_label: Some("Clear File B".to_string()),
+                    drag_active: compare_drag_active(),
+                    ondragover: move |evt: Event<DragData>| {
+                        evt.prevent_default();
+                        compare_drag_active.set(true);
+                    },
+                    ondragleave: move |_| compare_drag_active.set(false),
+                    ondrop: move |evt: Event<DragData>| {
+                        evt.prevent_default();
+                        compare_drag_active.set(false);
+                        if let Some(file) = evt.files().into_iter().next() {
+                            inspect_compare(file);
+                        }
+                    },
+                    onchange: move |evt: Event<FormData>| {
+                        if let Some(file) = evt.files().into_iter().next() {
+                            inspect_compare(file);
+                        }
+                    },
+                    onclear: move |_| {
+                        revoke_browser_preview_url(compare_preview_url());
+                        compare_preview_url.set(None);
+                        compare_probe_report.set(None);
+                        compare_diagnostic.set(None);
+                        compare_error.set(None);
+                        compare_progress.set(None);
+                        compare_upload_progress.set(None);
+                        compare_loading.set(false);
                     },
                 }
             }
@@ -183,10 +295,23 @@ pub fn DiagnosticPage() -> Element {
             if let Some(err) = error() {
                 p { class: "text-sm text-destructive", "Error: {err}" }
             }
+            if compare_loading() {
+                if let Some(p) = compare_progress() {
+                    ProgressPanel { progress: p }
+                } else {
+                    UploadingPanel { progress: compare_upload_progress() }
+                }
+            }
+            if let Some(err) = compare_error() {
+                p { class: "text-sm text-destructive", "Compare error: {err}" }
+            }
 
             // ── Results ──────────────────────────────────────────────────
             if let (Some(diag), Some(r)) = (diagnostic(), probe_report()) {
                 HeaderCard { report: r.clone(), diag: diag.clone() }
+                if let Some(url) = preview_url() {
+                    VideoPreviewPanel { preview_url: url }
+                }
                 DiagnosticResults { report: diag }
                 if let Some(err) = &r.mediainfo_error {
                     ToolErrorBanner { tool: "mediainfo", message: err.clone() }
@@ -200,7 +325,23 @@ pub fn DiagnosticPage() -> Element {
                 if let Some(mi) = &r.mediainfo {
                     MediaInfoPanel { mi: mi.clone() }
                 }
+                if !r.waveform_image.is_empty() {
+                    WaveformPanel { image_url: r.waveform_image.clone() }
+                }
+                if !r.scene_cuts.is_empty() {
+                    SceneCutsPanel { cuts: r.scene_cuts.clone() }
+                }
                 RawStreamDataPanel { report: r.clone() }
+            }
+            if let (Some(left_report), Some(left_diag), Some(right_report), Some(right_diag)) =
+                (probe_report(), diagnostic(), compare_probe_report(), compare_diagnostic())
+            {
+                ComparisonPanel {
+                    left_report,
+                    left_diag,
+                    right_report,
+                    right_diag,
+                }
             }
         }
     }
@@ -328,6 +469,59 @@ fn StatusPill(count: usize, kind: &'static str) -> Element {
 }
 
 #[component]
+fn UploadSlot(
+    slot_label: String,
+    title: String,
+    subtitle: String,
+    file_name: Option<String>,
+    clear_label: Option<String>,
+    drag_active: bool,
+    ondragover: EventHandler<Event<DragData>>,
+    ondragleave: EventHandler<Event<DragData>>,
+    ondrop: EventHandler<Event<DragData>>,
+    onchange: EventHandler<Event<FormData>>,
+    onclear: Option<EventHandler<Event<MouseData>>>,
+) -> Element {
+    let class = if drag_active {
+        "rounded-2xl border-2 border-dashed border-primary bg-primary/5 px-6 py-8 text-center transition-colors cursor-pointer"
+    } else {
+        "rounded-2xl border-2 border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors cursor-pointer"
+    };
+
+    rsx! {
+        div {
+            class,
+            ondragover: move |evt| ondragover.call(evt),
+            ondragleave: move |evt| ondragleave.call(evt),
+            ondrop: move |evt| ondrop.call(evt),
+            div { class: "space-y-1",
+                span { class: "inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground",
+                    "{slot_label}"
+                }
+                p { class: "text-sm font-medium", "{title}" }
+                p { class: "text-xs text-muted-foreground", "{subtitle}" }
+                if let Some(name) = file_name {
+                    p { class: "text-xs font-mono text-foreground truncate", "{name}" }
+                }
+            }
+            input {
+                class: "mt-4 block w-full text-sm",
+                r#type: "file",
+                accept: "video/*,.mov,.mp4,.mkv,.mxf",
+                onchange: move |evt| onchange.call(evt),
+            }
+            if let (Some(label), Some(onclear)) = (clear_label, onclear) {
+                button {
+                    class: "mt-3 inline-flex rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted/60",
+                    onclick: move |evt| onclear.call(evt),
+                    "{label}"
+                }
+            }
+        }
+    }
+}
+
+#[component]
 fn CheckRow(check: DiagnosticCheck) -> Element {
     let (badge_class, icon) = match check.status {
         DiagnosticStatus::Pass => (
@@ -356,6 +550,7 @@ fn CheckRow(check: DiagnosticCheck) -> Element {
         }
     }
 }
+
 
 // ── Upload progress panel ─────────────────────────────────────────────────────
 
@@ -410,6 +605,8 @@ fn ProgressPanel(progress: DiagnosticProgress) -> Element {
             mediainfo_done,
             loudness_done,
             thumbnails_done,
+            waveform_done,
+            scenes_done,
             subtitles_done,
         } => {
             let vc = video_codec.as_deref().unwrap_or("?");
@@ -429,6 +626,8 @@ fn ProgressPanel(progress: DiagnosticProgress) -> Element {
             mediainfo_done,
             loudness_done,
             thumbnails_done,
+            waveform_done,
+            scenes_done,
             subtitles_done,
             ..
         } = &progress.stage
@@ -437,6 +636,8 @@ fn ProgressPanel(progress: DiagnosticProgress) -> Element {
                 ("mediainfo", *mediainfo_done),
                 ("loudness", *loudness_done),
                 ("thumbnails", *thumbnails_done),
+                ("waveform", *waveform_done),
+                ("scenes", *scenes_done),
                 ("subtitles", *subtitles_done),
             ])
         } else {
@@ -781,11 +982,121 @@ fn MediaInfoPanel(mi: MediaInfoReport) -> Element {
     }
 }
 
+#[component]
+fn VideoPreviewPanel(preview_url: String) -> Element {
+    let mut open = use_signal(|| true);
+
+    rsx! {
+        div { class: "rounded-xl border border-border overflow-hidden",
+            button {
+                class: "w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 text-sm font-semibold",
+                onclick: move |_| open.toggle(),
+                span { "Video Preview" }
+                span { class: "text-xs text-muted-foreground", if open() { "▲" } else { "▼" } }
+            }
+            if open() {
+                div { class: "px-4 py-4 bg-card space-y-3",
+                    p { class: "text-xs text-muted-foreground",
+                        "Local browser preview of the uploaded file for quick visual inspection."
+                    }
+                    video {
+                        class: "aspect-video w-full rounded-lg border border-border bg-black object-contain",
+                        src: "{preview_url}",
+                        controls: true,
+                        preload: "metadata",
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn WaveformPanel(image_url: String) -> Element {
+    let mut open = use_signal(|| true);
+
+    rsx! {
+        div { class: "rounded-xl border border-border overflow-hidden",
+            button {
+                class: "w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 text-sm font-semibold",
+                onclick: move |_| open.toggle(),
+                span { "Waveform" }
+                span { class: "text-xs text-muted-foreground", if open() { "▲" } else { "▼" } }
+            }
+            if open() {
+                div { class: "px-4 py-4 bg-card space-y-3",
+                    p { class: "text-xs text-muted-foreground",
+                        "Audio energy overview to spot silence, peaks, and section changes faster."
+                    }
+                    div { class: "rounded-lg border border-slate-800 bg-slate-950 p-3",
+                        img {
+                            class: "w-full rounded object-contain",
+                            src: "{image_url}",
+                            alt: "Audio waveform preview"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn SceneCutsPanel(cuts: Vec<MediaSceneCut>) -> Element {
+    let mut open = use_signal(|| true);
+
+    rsx! {
+        div { class: "rounded-xl border border-border overflow-hidden",
+            button {
+                class: "w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 text-sm font-semibold",
+                onclick: move |_| open.toggle(),
+                span { "Scene Detection" }
+                span { class: "text-xs text-muted-foreground",
+                    "{cuts.len()} cut(s) "
+                    if open() { "▲" } else { "▼" }
+                }
+            }
+            if open() {
+                div { class: "px-4 py-4 bg-card space-y-2",
+                    p { class: "text-xs text-muted-foreground",
+                        "Likely visual cut points detected from frame-to-frame changes."
+                    }
+                    div { class: "divide-y divide-border rounded-lg border border-border overflow-hidden",
+                        for cut in cuts.iter() {
+                            div { class: "flex items-center justify-between gap-3 px-3 py-2 text-sm",
+                                span { class: "font-mono text-foreground", "{format_timestamp(cut.timestamp_secs)}" }
+                                if !cut.score.is_empty() {
+                                    span { class: "text-xs text-muted-foreground", "score {cut.score}" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Raw stream data panel ─────────────────────────────────────────────────────
 
 #[component]
 fn RawStreamDataPanel(report: MediaProbeReport) -> Element {
     let mut open = use_signal(|| false);
+    let video_count = report
+        .streams
+        .iter()
+        .filter(|stream| stream.codec_type == "video")
+        .count();
+    let audio_count = report
+        .streams
+        .iter()
+        .filter(|stream| stream.codec_type == "audio")
+        .count();
+    let subtitle_count = report
+        .streams
+        .iter()
+        .filter(|stream| stream.codec_type == "subtitle")
+        .count();
 
     rsx! {
         div { class: "rounded-xl border border-border overflow-hidden",
@@ -800,6 +1111,12 @@ fn RawStreamDataPanel(report: MediaProbeReport) -> Element {
             }
             if open() {
                 div { class: "divide-y divide-border",
+                    div { class: "px-4 py-3 bg-card flex flex-wrap gap-2",
+                        SummaryPill { label: "video", value: video_count.to_string() }
+                        SummaryPill { label: "audio", value: audio_count.to_string() }
+                        SummaryPill { label: "subtitle", value: subtitle_count.to_string() }
+                        SummaryPill { label: "chapters", value: report.chapter_count.to_string() }
+                    }
                     // Container / format section
                     div { class: "px-4 py-3 space-y-2",
                         p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1", "Container" }
@@ -847,10 +1164,8 @@ fn RawStreamDataPanel(report: MediaProbeReport) -> Element {
 
 #[component]
 fn StreamSection(stream: MediaStreamInfo) -> Element {
-    let title = format!(
-        "#{} {} — {}",
-        stream.index, stream.codec_type, stream.codec_name
-    );
+    let title = stream_section_title(&stream);
+    let summary = stream_summary(&stream);
 
     let mut rows: Vec<(&'static str, String)> = vec![
         ("Codec", stream.codec_long_name.clone()),
@@ -914,7 +1229,14 @@ fn StreamSection(stream: MediaStreamInfo) -> Element {
 
     rsx! {
         div { class: "px-4 py-3 space-y-2",
-            p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1", "{title}" }
+            div { class: "flex flex-wrap items-center gap-2 mb-1",
+                p { class: "text-xs font-semibold uppercase tracking-wide text-muted-foreground", "{title}" }
+                if !summary.is_empty() {
+                    span { class: "inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground",
+                        "{summary}"
+                    }
+                }
+            }
             div { class: "grid grid-cols-2 gap-x-6 gap-y-1 text-sm",
                 for (key, val) in rows.iter().filter(|(_, v)| !v.is_empty()) {
                     KvRow { label: *key, value: val.clone(), value_class: "text-foreground" }
@@ -952,6 +1274,113 @@ fn StreamSection(stream: MediaStreamInfo) -> Element {
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────
+
+#[component]
+fn SummaryPill(label: String, value: String) -> Element {
+    rsx! {
+        span { class: "inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground",
+            span { class: "font-semibold text-foreground", "{value}" }
+            span { "{label}" }
+        }
+    }
+}
+
+fn stream_section_title(stream: &MediaStreamInfo) -> String {
+    let kind = match stream.codec_type.as_str() {
+        "video" => "Video",
+        "audio" => "Audio",
+        "subtitle" => "Subtitle",
+        other if !other.is_empty() => other,
+        _ => "Stream",
+    };
+    if stream.codec_name.is_empty() {
+        format!("#{0} {kind}", stream.index)
+    } else {
+        format!("#{0} {kind} — {1}", stream.index, stream.codec_name)
+    }
+}
+
+fn stream_summary(stream: &MediaStreamInfo) -> String {
+    match stream.codec_type.as_str() {
+        "video" => {
+            let mut parts = vec![];
+            if !stream.width.is_empty() && !stream.height.is_empty() {
+                parts.push(format!("{}x{}", stream.width, stream.height));
+            }
+            if !stream.frame_rate.is_empty() {
+                parts.push(stream.frame_rate.clone());
+            }
+            if !stream.pixel_format.is_empty() {
+                parts.push(stream.pixel_format.clone());
+            }
+            parts.join(" • ")
+        }
+        "audio" => {
+            let mut parts = vec![];
+            if !stream.channel_layout.is_empty() {
+                parts.push(stream.channel_layout.clone());
+            }
+            if !stream.sample_rate.is_empty() {
+                parts.push(format!("{} Hz", stream.sample_rate));
+            }
+            if !stream.codec_name.is_empty() && stream.sample_format.is_empty() {
+                parts.push(stream.codec_name.clone());
+            } else if !stream.sample_format.is_empty() {
+                parts.push(stream.sample_format.clone());
+            }
+            parts.join(" • ")
+        }
+        "subtitle" => {
+            let mut parts = vec![];
+            if !stream.codec_name.is_empty() {
+                parts.push(stream.codec_name.clone());
+            }
+            if let Some(language) = stream
+                .tags
+                .iter()
+                .find(|kv| kv.key == "language" && !kv.value.is_empty())
+                .map(|kv| kv.value.clone())
+            {
+                parts.push(language);
+            }
+            parts.join(" • ")
+        }
+        _ => String::new(),
+    }
+}
+
+fn format_timestamp(timestamp_secs: f64) -> String {
+    let total_ms = (timestamp_secs * 1000.0).round() as u64;
+    let minutes = total_ms / 60_000;
+    let seconds = (total_ms % 60_000) / 1000;
+    let millis = total_ms % 1000;
+    format!("{minutes:02}:{seconds:02}.{millis:03}")
+}
+
+fn browser_preview_url(file: &dioxus::html::FileData) -> Option<String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        file.inner()
+            .downcast_ref::<web_sys::File>()
+            .and_then(|web_file| web_sys::Url::create_object_url_with_blob(web_file).ok())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = file;
+        None
+    }
+}
+
+fn revoke_browser_preview_url(url: Option<String>) {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(url) = url {
+        web_sys::Url::revoke_object_url(&url).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = url;
+}
 
 #[component]
 fn KvRow(label: String, value: String, value_class: &'static str) -> Element {
