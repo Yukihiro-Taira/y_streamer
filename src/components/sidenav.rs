@@ -1,3 +1,4 @@
+use dioxus::document::eval;
 use dioxus::prelude::*;
 use icons::{
     Bug, ChevronsUpDown, FileVideo, FlaskConical, LayoutDashboard, LogOut, ShieldCheck, UserRound,
@@ -10,7 +11,12 @@ use crate::domain::auth::_users::role::Role;
 use crate::domain::auth::_users::service::logout::logout;
 
 #[component]
-pub fn Sidenav(user: User, open: bool) -> Element {
+pub fn Sidenav(
+    user: User,
+    open: bool,
+    #[props(default = 160)] min_width: u32,
+    #[props(default = 480)] max_width: u32,
+) -> Element {
     let show_admin = user.has_any_role(&[Role::Root, Role::Admin]);
 
     let initials = user
@@ -28,11 +34,59 @@ pub fn Sidenav(user: User, open: bool) -> Element {
         .map(|r| format!("{:?}", r.role))
         .unwrap_or_default();
 
-    let width = if open { "w-64" } else { "w-16" };
+    // width: 64px when collapsed (icon-only), dynamic when open
+    let aside_style = if open {
+        format!("min-width:{min_width}px; max-width:{max_width}px; width:256px")
+    } else {
+        "width:64px".to_string()
+    };
+
+    // Wire drag handle + restore localStorage width when open
+    use_effect(move || {
+        if open {
+            eval(&format!(
+                r#"(function(){{
+                    const el = document.querySelector('[data-sidebar]');
+                    if (!el) return;
+                    const h = el.querySelector('[data-sidebar-handle]');
+                    if (!h || h.dataset.initialized) return;
+                    h.dataset.initialized = '1';
+
+                    const saved = localStorage.getItem('sidebar-width');
+                    if (saved) el.style.width = saved + 'px';
+
+                    h.addEventListener('mousedown', function(e) {{
+                        e.preventDefault();
+                        document.body.style.userSelect = 'none';
+                        const x0 = e.clientX;
+                        const w0 = el.getBoundingClientRect().width;
+                        const mn = parseInt(el.dataset.minWidth);
+                        const mx = parseInt(el.dataset.maxWidth);
+
+                        function move(e) {{
+                            el.style.width = Math.max(mn, Math.min(mx, w0 + e.clientX - x0)) + 'px';
+                        }}
+                        function up() {{
+                            document.body.style.userSelect = '';
+                            localStorage.setItem('sidebar-width', el.getBoundingClientRect().width);
+                            document.removeEventListener('mousemove', move);
+                            document.removeEventListener('mouseup', up);
+                        }}
+                        document.addEventListener('mousemove', move);
+                        document.addEventListener('mouseup', up);
+                    }});
+                }})();"#
+            ));
+        }
+    });
 
     rsx! {
         aside {
-            class: "flex flex-col h-screen border-r bg-sidenav text-sidenav-foreground shrink-0 sticky top-0 overflow-hidden transition-all duration-200 {width}",
+            class: "relative flex flex-col h-screen border-r bg-sidenav text-sidenav-foreground shrink-0 sticky top-0 overflow-hidden transition-[width] duration-200",
+            style: "{aside_style}",
+            "data-sidebar": true,
+            "data-min-width": "{min_width}",
+            "data-max-width": "{max_width}",
 
             // ── Header ────────────────────────────────────────────────────
             div { class: "h-16 flex items-center px-3 border-b shrink-0",
@@ -108,6 +162,14 @@ pub fn Sidenav(user: User, open: bool) -> Element {
 
             // ── NavUser footer ────────────────────────────────────────────
             NavUser { user, open, initials, role_label }
+
+            // ── Resize handle (right edge, open only) ─────────────────────
+            if open {
+                div {
+                    class: "absolute top-0 right-0 w-1 h-full z-50 cursor-col-resize hover:bg-border transition-colors",
+                    "data-sidebar-handle": true,
+                }
+            }
         }
     }
 }
@@ -159,7 +221,6 @@ fn NavUser(user: User, open: bool, initials: String, role_label: String) -> Elem
             // Dropdown — pops up above trigger, extends to the right
             if dropdown_open() {
                 div { class: "absolute bottom-full left-0 mb-1 min-w-56 w-max bg-card border rounded-lg shadow-md py-1 z-50",
-                    // User info header
                     div { class: "flex items-center gap-2 px-2 py-1.5 border-b mb-1",
                         div { class: "size-8 rounded-lg bg-muted flex items-center justify-center text-xs font-semibold shrink-0",
                             "{initials}"
@@ -170,7 +231,6 @@ fn NavUser(user: User, open: bool, initials: String, role_label: String) -> Elem
                         }
                     }
 
-                    // Profile link
                     Link {
                         to: Route::DashboardProfile {},
                         class: "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors w-full",
@@ -181,7 +241,6 @@ fn NavUser(user: User, open: bool, initials: String, role_label: String) -> Elem
 
                     div { class: "h-px bg-border my-1" }
 
-                    // Sign out
                     button {
                         class: "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors w-full text-destructive",
                         onclick: move |_| {

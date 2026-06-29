@@ -59,7 +59,7 @@
 | ⬜ | **Job progress bar UI** | Visual progress tied to `media_write` jobs |
 | ⬜ | **Video player** | In-app playback of uploaded / processed files |
 | ✅ | **Dark mode** | Toggle in navbar top-right, localStorage persistence |
-| ⬜ | **Side menu resize** | enables the side bar to be resized |
+| ✅ | **Side menu resize** | enables the side bar to be resized |
 
 ---
 
