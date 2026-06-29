@@ -7,6 +7,8 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::components::ui::button::{Button, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
+use crate::components::ui::field::{Field, FieldDescription, FieldGroup, FieldLabel};
+use crate::components::ui::input::{Input, InputType};
 #[cfg(target_arch = "wasm32")]
 use crate::domain::media_read::data::media_probe_report::MediaProbeErrorResponse;
 use crate::domain::media_read::data::media_probe_report::MediaProbeReport;
@@ -36,6 +38,12 @@ pub fn MediaWritePage() -> Element {
     let mut selected_name = use_signal(|| None::<String>);
     let mut selected_size_bytes = use_signal(|| None::<u64>);
     let mut operation = use_signal(|| MediaWriteOperation::Compress);
+    let mut output_container = use_signal(|| "mp4".to_string());
+    let mut video_codec = use_signal(|| "h264".to_string());
+    let mut audio_codec = use_signal(|| "aac".to_string());
+    let mut crf = use_signal(|| "23".to_string());
+    let mut preset = use_signal(|| "fast".to_string());
+    let mut audio_bitrate = use_signal(|| "128k".to_string());
     let mut read_loading = use_signal(|| false);
     let mut write_loading = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
@@ -69,6 +77,27 @@ pub fn MediaWritePage() -> Element {
             selected_size_bytes.set(None);
         }
         selected_file.set(Some(file_for_state));
+        output_container.set("mp4".to_string());
+        video_codec.set("h264".to_string());
+        audio_codec.set("aac".to_string());
+        crf.set("23".to_string());
+        preset.set("fast".to_string());
+        audio_bitrate.set("128k".to_string());
+        error.set(None);
+        read_report.set(None);
+        result.set(None);
+        thumbnails.set(Vec::new());
+        read_loading.set(false);
+        push_debug_event(&mut debug_events, "file staged for explicit inspect".to_string());
+    };
+
+    let mut inspect_selected_file = move |_| {
+        let maybe_file = selected_file.read().clone();
+        let Some(file) = maybe_file else {
+            error.set(Some("Select a file first.".into()));
+            return;
+        };
+
         error.set(None);
         read_report.set(None);
         result.set(None);
@@ -131,12 +160,12 @@ pub fn MediaWritePage() -> Element {
     let mut run_job = move |current_operation: MediaWriteOperation| {
         let maybe_file = selected_file.read().clone();
         operation.set(current_operation);
-        let current_output_container = "mp4".to_string();
-        let current_video_codec = "h264".to_string();
-        let current_audio_codec = "aac".to_string();
-        let current_crf = "23".to_string();
-        let current_preset = "fast".to_string();
-        let current_audio_bitrate = "128k".to_string();
+        let current_output_container = output_container();
+        let current_video_codec = video_codec();
+        let current_audio_codec = audio_codec();
+        let current_crf = crf();
+        let current_preset = preset();
+        let current_audio_bitrate = audio_bitrate();
 
         error.set(None);
         result.set(None);
@@ -207,7 +236,7 @@ pub fn MediaWritePage() -> Element {
                 CardHeader {
                     CardTitle { "Create Job" }
                 CardDescription {
-                        "Drop one file. The app probes it immediately, shows the raw ffprobe JSON, then unlocks the write actions."
+                        "Drop one file, inspect it explicitly, then launch the write action you want."
                     }
                 }
                 CardContent { class: "space-y-4",
@@ -244,8 +273,22 @@ pub fn MediaWritePage() -> Element {
                                 }
                                 if read_loading() {
                                     p { class: "text-xs text-muted-foreground", "Reading metadata..." }
+                                } else if read_report().is_none() {
+                                    button {
+                                        class: "inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50",
+                                        r#type: "button",
+                                        onclick: inspect_selected_file,
+                                        "Inspect File"
+                                    }
                                 } else if read_report().is_some() {
                                     div { class: "flex flex-col gap-2 sm:flex-row",
+                                        button {
+                                            class: "inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50",
+                                            r#type: "button",
+                                            disabled: write_loading(),
+                                            onclick: inspect_selected_file,
+                                            "Re-Inspect"
+                                        }
                                         button {
                                             class: "inline-flex h-9 items-center justify-center rounded-md border border-green-500 bg-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:pointer-events-none disabled:opacity-50",
                                             r#type: "button",
@@ -278,7 +321,87 @@ pub fn MediaWritePage() -> Element {
                                     p { "trace_id: {report.trace_id}" }
                                     p { "format: {report.format_name}" }
                                     p { "streams: total={report.stream_count} video={report.video_count} audio={report.audio_count}" }
-                                    p { "preset used for write actions: h264 / aac / mp4 / crf 23 / fast / 128k" }
+                                }
+
+                                FieldGroup { class: "grid gap-3 md:grid-cols-2 xl:grid-cols-3",
+                                    Field {
+                                        FieldLabel { "Output container" }
+                                        select {
+                                            class: "w-full rounded-md border border-border bg-background px-3 py-2 text-sm",
+                                            value: "{output_container}",
+                                            onchange: move |evt| output_container.set(evt.value()),
+                                            option { value: "mp4", "MP4" }
+                                            option { value: "mov", "MOV" }
+                                            option { value: "mkv", "MKV" }
+                                            option { value: "webm", "WebM" }
+                                        }
+                                    }
+                                    Field {
+                                        FieldLabel { "Video codec" }
+                                        select {
+                                            class: "w-full rounded-md border border-border bg-background px-3 py-2 text-sm",
+                                            value: "{video_codec}",
+                                            onchange: move |evt| video_codec.set(evt.value()),
+                                            option { value: "h264", "H.264" }
+                                            option { value: "hevc", "HEVC / H.265" }
+                                            option { value: "vp9", "VP9" }
+                                            if operation() == MediaWriteOperation::Transcode {
+                                                option { value: "copy", "Copy video" }
+                                            }
+                                        }
+                                    }
+                                    Field {
+                                        FieldLabel { "Audio codec" }
+                                        select {
+                                            class: "w-full rounded-md border border-border bg-background px-3 py-2 text-sm",
+                                            value: "{audio_codec}",
+                                            onchange: move |evt| audio_codec.set(evt.value()),
+                                            option { value: "aac", "AAC" }
+                                            option { value: "opus", "Opus" }
+                                            option { value: "mp3", "MP3" }
+                                            if operation() == MediaWriteOperation::Transcode {
+                                                option { value: "copy", "Copy audio" }
+                                            }
+                                        }
+                                    }
+                                    Field { disabled: operation() != MediaWriteOperation::Compress,
+                                        FieldLabel { "CRF" }
+                                        Input {
+                                            class: "text-sm",
+                                            r#type: InputType::Number,
+                                            value: crf(),
+                                            disabled: operation() != MediaWriteOperation::Compress,
+                                            oninput: move |evt: FormEvent| crf.set(evt.value()),
+                                        }
+                                        FieldDescription { "Lower CRF keeps more quality but increases file size." }
+                                    }
+                                    Field { disabled: operation() != MediaWriteOperation::Compress,
+                                        FieldLabel { "Preset" }
+                                        select {
+                                            class: "w-full rounded-md border border-border bg-background px-3 py-2 text-sm",
+                                            value: "{preset}",
+                                            disabled: operation() != MediaWriteOperation::Compress,
+                                            onchange: move |evt| preset.set(evt.value()),
+                                            option { value: "ultrafast", "ultrafast" }
+                                            option { value: "superfast", "superfast" }
+                                            option { value: "veryfast", "veryfast" }
+                                            option { value: "fast", "fast" }
+                                            option { value: "medium", "medium" }
+                                            option { value: "slow", "slow" }
+                                        }
+                                        FieldDescription { "Compression only. Faster presets trade quality for speed." }
+                                    }
+                                    Field { disabled: operation() == MediaWriteOperation::Transcode && audio_codec() == "copy",
+                                        FieldLabel { "Audio bitrate" }
+                                        Input {
+                                            class: "text-sm",
+                                            r#type: InputType::Text,
+                                            value: audio_bitrate(),
+                                            disabled: operation() == MediaWriteOperation::Transcode && audio_codec() == "copy",
+                                            oninput: move |evt: FormEvent| audio_bitrate.set(evt.value()),
+                                        }
+                                        FieldDescription { "Examples: 96k, 128k, 192k." }
+                                    }
                                 }
                             }
 

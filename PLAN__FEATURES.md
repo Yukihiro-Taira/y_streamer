@@ -19,8 +19,8 @@
 |---|---|---|---|---|
 | ✅ | **Thumbnail generation** | 🟡 Medium | ✅ Done | 3 frames at 10%/50%/90% → base64 in response, shown in UI |
 | ✅ | **Subtitle extract** | 🟡 Medium | ✅ Done | Extract all streams → SRT, browser download button per track |
-| ⬜ | **Waveform** | 🟢 Low | 🟡 Medium | Audio file → waveform image (ffmpeg `showwavespic`) |
-| ⬜ | **Scene detection** | 🟡 Medium | 🟡 Medium | Detect cuts / scene changes (ffmpeg `scdet` filter) |
+| ✅ | **Waveform** | 🟢 Low | ✅ Done | Audio file → waveform image (ffmpeg `showwavespic`) |
+| ✅ | **Scene detection** | 🟡 Medium | ✅ Done | Detect cuts / scene changes to support deeper content inspection |
 
 ---
 
@@ -29,9 +29,9 @@
 | Status | Feature | Difficulty | Priority | Description |
 |---|---|---|---|---|
 | ⬜ | **Job progress** | 🟡 Medium | 🔴 High | Real-time FFmpeg progress (%, ETA) via SSE or polling |
-| ⬜ | **Download result** | 🟢 Low | 🔴 High | Download processed file after job completes |
+| ✅ | **Download result** | 🟢 Low | ✅ Done | Download processed file after job completes |
 | ⬜ | **Job history** | 🟡 Medium | 🔴 High | List past jobs + status (pending / running / done / failed) |
-| ⬜ | **Format conversion** | 🟡 Medium | 🔴 High | mp4→webm, mov→mp4, mkv→mp4 |
+| ✅ | **Format conversion** | 🟡 Medium | ✅ Done | mp4→webm, mov→mp4, mkv→mp4 via selectable output container/codecs in `Media Write` |
 | ⬜ | **Audio extract** | 🟢 Low | 🟡 Medium | Strip video → mp3 / wav / aac |
 | ⬜ | **Clip trim** | 🟡 Medium | 🟡 Medium | Cut start/end timestamps (`-ss` `-to`) |
 | ⬜ | **Resize** | 🟡 Medium | 🟡 Medium | Scale to 720p / 1080p / custom |

@@ -49,6 +49,9 @@ pub enum Route {
         #[route("/test-media-jobs")]
         TestMediaJobsRoute {},
 
+        #[route("/media-write")]
+        MediaWriteRoute {},
+
         #[route("/test-workflows")]
         TestWorkflowsRoute {},
 
@@ -87,7 +90,7 @@ fn DashboardShell() -> Element {
         Route::DashboardProfile {} => "Profile",
         Route::DashboardAccessDemo {} => "Access Demo",
         Route::TestPageRoute {} => "File Drop Test",
-        Route::TestMediaJobsRoute {} => "Media Jobs",
+        Route::TestMediaJobsRoute {} | Route::MediaWriteRoute {} => "Media Write",
         Route::TestWorkflowsRoute {} => "Workflows",
         Route::TestVideoWorkflowRoute {} => "Video Workflow",
         Route::DiagnosticRoute {} => "Video Diagnostic",
@@ -172,6 +175,11 @@ fn TestPageRoute() -> Element {
 
 #[component]
 fn TestMediaJobsRoute() -> Element {
+    rsx! { MediaWritePage {} }
+}
+
+#[component]
+fn MediaWriteRoute() -> Element {
     rsx! { MediaWritePage {} }
 }
 

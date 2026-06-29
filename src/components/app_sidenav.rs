@@ -99,11 +99,6 @@ pub fn AppSidenav(user: User) -> Element {
                         }
                     }
                     SidenavMenuItem {
-                        NavItem { to: Route::TestMediaJobsRoute {}, label: "Media Jobs", open,
-                            FileVideo { class: "size-4 shrink-0" }
-                        }
-                    }
-                    SidenavMenuItem {
                         NavItem { to: Route::TestWorkflowsRoute {}, label: "Workflows", open,
                             FlaskConical { class: "size-4 shrink-0" }
                         }
@@ -115,6 +110,11 @@ pub fn AppSidenav(user: User) -> Element {
                     }
                     SidenavMenuItem {
                         NavItem { to: Route::DiagnosticRoute {}, label: "Diagnostic", open,
+                            FileVideo { class: "size-4 shrink-0" }
+                        }
+                    }
+                    SidenavMenuItem {
+                        NavItem { to: Route::MediaWriteRoute {}, label: "Media Write", open,
                             FileVideo { class: "size-4 shrink-0" }
                         }
                     }
