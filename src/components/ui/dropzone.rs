@@ -188,13 +188,14 @@ pub fn Dropzone(
             let Some(raw) = mounted.downcast::<web_sys::Element>() else { return };
             let Ok(input_el) = raw.clone().dyn_into::<web_sys::HtmlInputElement>() else { return };
 
+            let accept_for_change = accept_input.clone();
             let on_change: Closure<dyn FnMut(web_sys::Event)> =
                 Closure::new(move |e: web_sys::Event| {
                     let Some(target) = e.target() else { return };
                     let Ok(input) = target.dyn_into::<web_sys::HtmlInputElement>() else { return };
                     let Some(file_list) = input.files() else { return };
 
-                    let new_files = collect_files(&file_list, max_size_mb, &accept_input);
+                    let new_files = collect_files(&file_list, max_size_mb, &accept_for_change);
                     let mut w = files.write();
                     let remaining = max_files
                         .map(|m| m.saturating_sub(w.len()))
