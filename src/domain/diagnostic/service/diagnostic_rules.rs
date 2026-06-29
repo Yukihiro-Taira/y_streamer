@@ -17,6 +17,11 @@ pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticRe
         .iter()
         .filter(|s| s.codec_type == "audio")
         .collect();
+    let subtitles: Vec<&MediaStreamInfo> = report
+        .streams
+        .iter()
+        .filter(|s| s.codec_type == "subtitle")
+        .collect();
 
     let mut checks = vec![check_container(&report.format_name, profile)];
 
@@ -37,6 +42,7 @@ pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticRe
         ));
         checks.push(check_b_frames(&vs.has_b_frames));
         checks.push(check_chroma_location(&vs.chroma_location));
+        checks.push(check_closed_captions(&vs.closed_captions));
         if !vs.side_data.is_empty() {
             checks.extend(check_hdr_side_data(&vs.side_data));
         }
@@ -56,6 +62,8 @@ pub fn run(report: &MediaProbeReport, profile: &PlatformProfile) -> DiagnosticRe
     }
 
     checks.push(check_subtitles(report.subtitle_count));
+    checks.push(check_subtitle_codecs(&subtitles));
+    checks.push(check_forced_subtitles(&subtitles));
     checks.push(check_extension(&report.file_name, &report.format_name));
     checks.push(check_encoder_tag(&report.format_tags));
 
@@ -378,6 +386,44 @@ fn check_subtitles(subtitle_count: usize) -> DiagnosticCheck {
     }
 }
 
+fn check_subtitle_codecs(subtitles: &[&MediaStreamInfo]) -> DiagnosticCheck {
+    let label = "Subtitle codec";
+    if subtitles.is_empty() {
+        return pass(label, "No subtitle stream to validate");
+    }
+
+    let codecs = subtitles
+        .iter()
+        .map(|stream| stream.codec_name.trim())
+        .collect::<Vec<_>>();
+
+    let unsupported = codecs
+        .iter()
+        .copied()
+        .filter(|codec| {
+            !matches!(
+                *codec,
+                "mov_text" | "srt" | "subrip" | "webvtt" | "ass" | "ssa"
+            )
+        })
+        .collect::<Vec<_>>();
+
+    if unsupported.is_empty() {
+        pass(
+            label,
+            format!("Supported subtitle codec(s): {}", codecs.join(", ")),
+        )
+    } else {
+        warn(
+            label,
+            format!(
+                "Unsupported or platform-sensitive subtitle codec(s): {}",
+                unsupported.join(", ")
+            ),
+        )
+    }
+}
+
 fn check_extension(file_name: &str, format_name: &str) -> DiagnosticCheck {
     let label = "File extension";
     let ext = file_name.rsplit('.').next().unwrap_or("").to_lowercase();
@@ -506,6 +552,21 @@ fn check_chroma_location(chroma_location: &str) -> DiagnosticCheck {
     }
 }
 
+fn check_closed_captions(closed_captions: &str) -> DiagnosticCheck {
+    let label = "Closed captions";
+    match closed_captions.trim() {
+        "" | "0" => pass(label, "No embedded CEA-608/708 captions flagged"),
+        "1" => warn(
+            label,
+            "Embedded closed captions detected — separate from subtitle streams",
+        ),
+        value => warn(
+            label,
+            format!("{value} caption flag(s) detected — verify CEA-608/708 handling"),
+        ),
+    }
+}
+
 fn check_hdr_side_data(side_data: &[MediaKeyValue]) -> Vec<DiagnosticCheck> {
     let mut checks = vec![];
     for entry in side_data {
@@ -562,6 +623,25 @@ fn check_hdr_side_data(side_data: &[MediaKeyValue]) -> Vec<DiagnosticCheck> {
         checks.push(check);
     }
     checks
+}
+
+fn check_forced_subtitles(subtitles: &[&MediaStreamInfo]) -> DiagnosticCheck {
+    let label = "Forced subtitles";
+    let forced_count = subtitles
+        .iter()
+        .filter(|stream| has_disposition(stream, "forced"))
+        .count();
+    match forced_count {
+        0 => pass(label, "No forced subtitle stream flagged"),
+        1 => warn(
+            label,
+            "1 forced subtitle stream present — verify target player behavior",
+        ),
+        count => warn(
+            label,
+            format!("{count} forced subtitle streams present — verify delivery intent"),
+        ),
+    }
 }
 
 fn check_encoder_tag(format_tags: &[MediaKeyValue]) -> DiagnosticCheck {
@@ -703,5 +783,76 @@ mod tests {
             .find(|c| c.label == "Sample rate")
             .unwrap();
         assert!(matches!(sr.status, DiagnosticStatus::Fail));
+    }
+
+    #[test]
+    fn closed_captions_flag_is_warn() {
+        let mut report = make_report();
+        report.streams[0].closed_captions = "1".into();
+        let diag = run(&report, &PlatformProfile::Web);
+        let cc = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Closed captions")
+            .unwrap();
+        assert!(matches!(cc.status, DiagnosticStatus::Warn));
+    }
+
+    #[test]
+    fn forced_subtitle_stream_is_warn() {
+        let mut report = make_report();
+        report.subtitle_count = 1;
+        report.streams.push(MediaStreamInfo {
+            codec_type: "subtitle".into(),
+            codec_name: "mov_text".into(),
+            disposition: vec![MediaKeyValue {
+                key: "forced".into(),
+                value: "1".into(),
+            }],
+            ..Default::default()
+        });
+        let diag = run(&report, &PlatformProfile::Web);
+        let forced = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Forced subtitles")
+            .unwrap();
+        assert!(matches!(forced.status, DiagnosticStatus::Warn));
+    }
+
+    #[test]
+    fn supported_subtitle_codec_is_pass() {
+        let mut report = make_report();
+        report.subtitle_count = 1;
+        report.streams.push(MediaStreamInfo {
+            codec_type: "subtitle".into(),
+            codec_name: "mov_text".into(),
+            ..Default::default()
+        });
+        let diag = run(&report, &PlatformProfile::Web);
+        let codec = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Subtitle codec")
+            .unwrap();
+        assert!(matches!(codec.status, DiagnosticStatus::Pass));
+    }
+
+    #[test]
+    fn unsupported_subtitle_codec_is_warn() {
+        let mut report = make_report();
+        report.subtitle_count = 1;
+        report.streams.push(MediaStreamInfo {
+            codec_type: "subtitle".into(),
+            codec_name: "dvd_subtitle".into(),
+            ..Default::default()
+        });
+        let diag = run(&report, &PlatformProfile::Web);
+        let codec = diag
+            .checks
+            .iter()
+            .find(|c| c.label == "Subtitle codec")
+            .unwrap();
+        assert!(matches!(codec.status, DiagnosticStatus::Warn));
     }
 }
