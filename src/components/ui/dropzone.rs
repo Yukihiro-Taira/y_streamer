@@ -1,3 +1,4 @@
+use dioxus::document::eval;
 use dioxus::prelude::*;
 use icons::{FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, LayoutGrid, LayoutList};
 use tw_merge::tw_merge;
@@ -39,6 +40,7 @@ pub struct DropzoneCtx {
     pub is_dragging: Signal<bool>,
     pub files: Signal<Vec<DropzoneFile>>,
     pub view: Signal<ViewMode>,
+    pub file_input_id: &'static str,
 }
 
 // ── WASM helper ───────────────────────────────────────────────────────────────
@@ -91,7 +93,12 @@ pub fn Dropzone(
     let mut is_dragging = use_signal(|| false);
     let view = use_signal(|| ViewMode::List);
 
-    use_context_provider(|| DropzoneCtx { files, is_dragging, view });
+    use_context_provider(|| DropzoneCtx {
+        files,
+        is_dragging,
+        view,
+        file_input_id: "dz-file-input",
+    });
 
     #[cfg(not(target_arch = "wasm32"))]
     return rsx! { div { {children} } };
@@ -172,8 +179,47 @@ pub fn Dropzone(
             on_drop.forget();
         };
 
+        let accept_input = accept.clone();
+        let on_mounted_input = move |event: dioxus::prelude::MountedEvent| {
+            use wasm_bindgen::JsCast;
+            use wasm_bindgen::closure::Closure;
+
+            let mounted = event.data();
+            let Some(raw) = mounted.downcast::<web_sys::Element>() else { return };
+            let Ok(input_el) = raw.clone().dyn_into::<web_sys::HtmlInputElement>() else { return };
+
+            let on_change: Closure<dyn FnMut(web_sys::Event)> =
+                Closure::new(move |e: web_sys::Event| {
+                    let Some(target) = e.target() else { return };
+                    let Ok(input) = target.dyn_into::<web_sys::HtmlInputElement>() else { return };
+                    let Some(file_list) = input.files() else { return };
+
+                    let new_files = collect_files(&file_list, max_size_mb, &accept_input);
+                    let mut w = files.write();
+                    let remaining = max_files
+                        .map(|m| m.saturating_sub(w.len()))
+                        .unwrap_or(usize::MAX);
+                    w.extend(new_files.into_iter().take(remaining));
+
+                    input.set_value("");
+                });
+            input_el
+                .add_event_listener_with_callback("change", on_change.as_ref().unchecked_ref())
+                .ok();
+            on_change.forget();
+        };
+
         rsx! {
-            div { onmounted: on_mounted, {children} }
+            div { onmounted: on_mounted,
+                input {
+                    id: "dz-file-input",
+                    r#type: "file",
+                    multiple: true,
+                    style: "display:none",
+                    onmounted: on_mounted_input,
+                }
+                {children}
+            }
         }
     }
 }
@@ -210,6 +256,7 @@ pub fn DropzoneOverlay(#[props(into, optional)] class: Option<String>) -> Elemen
 pub fn DropzoneArea(#[props(into, optional)] class: Option<String>, children: Element) -> Element {
     let ctx = use_context::<DropzoneCtx>();
     let dragging = *ctx.is_dragging.read();
+    let input_id = ctx.file_input_id;
 
     let base = if dragging {
         "w-full min-h-[200px] border border-dashed border-primary bg-primary/5 rounded-xl py-12 px-10 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer"
@@ -218,7 +265,11 @@ pub fn DropzoneArea(#[props(into, optional)] class: Option<String>, children: El
     };
 
     rsx! {
-        div { class: "{tw_merge!(base, class.as_deref().unwrap_or(\"\"))}", {children} }
+        div {
+            class: "{tw_merge!(base, class.as_deref().unwrap_or(\"\"))}",
+            onclick: move |_| { eval(&format!("document.getElementById('{}').click()", input_id)); },
+            {children}
+        }
     }
 }
 
