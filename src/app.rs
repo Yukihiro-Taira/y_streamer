@@ -99,7 +99,9 @@ fn DashboardShell() -> Element {
             let user = user.clone();
             rsx! {
                 SidenavProvider {
-                    div { class: "flex h-screen overflow-hidden",
+                    div {
+                        class: "flex h-screen w-full overflow-hidden",
+                        "data-name": "dashboard-shell",
                         AppSidenav { user: user.clone() }
                         div { class: "flex-1 overflow-auto flex flex-col min-w-0",
                             // ── Header ────────────────────────────────────────
