@@ -15,51 +15,51 @@
 
 ## media_read — To do
 
-| Feature | Description |
-|---|---|
-| **Thumbnail generation** ✓ | 3 frames at 10%/50%/90% → base64 in response, shown in UI |
-| **Subtitle extract** ✓ | Extract all streams → SRT, browser download button per track |
-| **Waveform** | Audio file → waveform image (ffmpeg `showwavespic`) |
-| **Scene detection** | Detect cuts / scene changes (ffmpeg `scdet` filter) |
+| Status | Feature | Description |
+|---|---|---|
+| ✅ | **Thumbnail generation** | 3 frames at 10%/50%/90% → base64 in response, shown in UI |
+| ✅ | **Subtitle extract** | Extract all streams → SRT, browser download button per track |
+| ⬜ | **Waveform** | Audio file → waveform image (ffmpeg `showwavespic`) |
+| ⬜ | **Scene detection** | Detect cuts / scene changes (ffmpeg `scdet` filter) |
 
 ---
 
 ## media_write — To do
 
-| Feature | Description |
-|---|---|
-| **Job progress** | Real-time FFmpeg progress (%, ETA) via SSE or polling |
-| **Download result** | Download processed file after job completes |
-| **Job history** | List past jobs + status (pending / running / done / failed) |
-| **Format conversion** | mp4→webm, mov→mp4, mkv→mp4 |
-| **Audio extract** | Strip video → mp3 / wav / aac |
-| **Clip trim** | Cut start/end timestamps (`-ss` `-to`) |
-| **Resize** | Scale to 720p / 1080p / custom |
-| **Bitrate control** | Set target bitrate / CRF |
-| **Batch jobs** | Queue multiple files, process in parallel |
-| **Watermark** | Overlay image/text on video |
-| **Audio Broadacast Convert** | converts audio tracks to Broadcast deleviery specs(stereo to mono)(atmos,5.1 convert)|
-| **Keyframe detection/analasis** | detects the keyframe data and returns analitical data of each keyframe|
-| **HDR processing** | detects HDR content(already does)enables lvl changing or format convertion(PQ to HDR10),nits control(1000 nits -> 400nits|| 400bits -> 3000nits etc..)|
-| **Audio Spectrum analyzer** | audio track spectrum analyzer for audio visulization|
-| **Audio sync control(slipping,move foward/back)** | converts audio tracks to Broadcast deleviery specs(stereo to mono)(atmos,5.1 convert)|
-| **Timecode** | reads timecode and has the ability to change the timecode value|
-| **Subtitles** | reads/writes subtitiles into CEA-608/CEA-708, subtitle timing adjustments along with editing|
+| Status | Feature | Description |
+|---|---|---|
+| ⬜ | **Job progress** | Real-time FFmpeg progress (%, ETA) via SSE or polling |
+| ⬜ | **Download result** | Download processed file after job completes |
+| ⬜ | **Job history** | List past jobs + status (pending / running / done / failed) |
+| ⬜ | **Format conversion** | mp4→webm, mov→mp4, mkv→mp4 |
+| ⬜ | **Audio extract** | Strip video → mp3 / wav / aac |
+| ⬜ | **Clip trim** | Cut start/end timestamps (`-ss` `-to`) |
+| ⬜ | **Resize** | Scale to 720p / 1080p / custom |
+| ⬜ | **Bitrate control** | Set target bitrate / CRF |
+| ⬜ | **Batch jobs** | Queue multiple files, process in parallel |
+| ⬜ | **Watermark** | Overlay image/text on video |
+| ⬜ | **Audio Broadcast Convert** | converts audio tracks to Broadcast delivery specs (stereo to mono)(atmos, 5.1 convert) |
+| ⬜ | **Keyframe detection/analysis** | detects keyframe data and returns analytical data of each keyframe |
+| ⬜ | **HDR processing** | detects HDR content, enables level changing or format conversion (PQ to HDR10), nits control |
+| ⬜ | **Audio Spectrum analyzer** | audio track spectrum analyzer for audio visualization |
+| ⬜ | **Audio sync control (slipping, move forward/back)** | slip/move audio tracks forward or backward in time |
+| ⬜ | **Timecode** | reads timecode and has ability to change the timecode value |
+| ⬜ | **Subtitles** | reads/writes subtitles into CEA-608/CEA-708, timing adjustments and editing |
 
 ---
 
 ## UI / UX — To do
 
-| Feature | Description |
-|---|---|
-| **Dropzone click-to-browse** | Click area → native file picker |
-| **Dropzone append files** | Drop adds to list, doesn't replace |
-| **Dropzone validation** | `max_files`, `max_size_mb`, `accept` mime types |
-| **Dropzone list/grid toggle** | Switch between row list and card grid |
-| **Job progress bar UI** | Visual progress tied to `media_write` jobs |
-| **Video player** | In-app playback of uploaded / processed files |
-| **Dark mode** | Already have CSS vars, just needs a toggle |
-| **side menu resize** | enables the side bar to be resized|
+| Status | Feature | Description |
+|---|---|---|
+| ⬜ | **Dropzone click-to-browse** | Click area → native file picker |
+| ⬜ | **Dropzone append files** | Drop adds to list, doesn't replace |
+| ⬜ | **Dropzone validation** | `max_files`, `max_size_mb`, `accept` mime types |
+| ⬜ | **Dropzone list/grid toggle** | Switch between row list and card grid |
+| ⬜ | **Job progress bar UI** | Visual progress tied to `media_write` jobs |
+| ⬜ | **Video player** | In-app playback of uploaded / processed files |
+| ✅ | **Dark mode** | Toggle in navbar top-right, localStorage persistence |
+| ⬜ | **Side menu resize** | enables the side bar to be resized |
 
 ---
 
